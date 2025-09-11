@@ -575,11 +575,21 @@ export default function HomePage() {
             setSelectedDocument,
         };
 
-        if (selectedType === 'Rebut' && doc.data.items)
+        // Debug logging
+        console.log('renderTableData debug:', {
+            selectedType,
+            docDataKeys: Object.keys(doc.data || {}),
+            hasItems: !!doc.data?.items,
+            hasDowntimeEvents: !!doc.data?.downtime_events,
+            hasTeamSummary: !!doc.data?.team_summary,
+            documentType: doc.data?.document_type,
+        });
+
+        if (selectedType === 'Rebut' && doc.data?.items)
             return <RebutTable {...tableProps} />;
-        if (selectedType === 'NPT' && doc.data.downtime_events)
+        if (selectedType === 'NPT' && doc.data?.downtime_events)
             return <NPTTable {...tableProps} />;
-        if (selectedType === 'Kosu' && doc.data.team_summary)
+        if (selectedType === 'Kosu' && doc.data?.team_summary)
             return <KosuTable {...tableProps} />;
 
         return (
