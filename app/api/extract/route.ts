@@ -9,7 +9,7 @@ import {
 import { NextRequest, NextResponse } from 'next/server';
 
 // Allow this API route to run longer to accommodate slow backend
-export const maxDuration = 600;
+export const maxDuration = 300;
 
 const ONETECH_API_URL =
     process.env.NEXT_PUBLIC_EXTRACT_API ||
