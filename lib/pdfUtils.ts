@@ -2,51 +2,37 @@ import { exec } from 'child_process';
 import fs from 'fs';
 import path from 'path';
 import { PDFDocument } from 'pdf-lib';
-import pdf2pic from 'pdf2pic';
 import { promisify } from 'util';
-import poppler from 'pdf-poppler';
 
-// PDF.js imports for Canvas rendering fallback
-let pdfjsLib: any = null;
-let Canvas: any = null;
+// Optional imports that may not be available in all environments
+let pdf2pic: any = null;
+let poppler: any = null;
 
-// Lazy load PDF.js and Canvas for serverless compatibility
-async function getPdfJs() {
-    if (!pdfjsLib) {
+// Lazy load optional dependencies
+async function getPdf2Pic() {
+    if (!pdf2pic) {
         try {
-            const pdfjs = await import('pdfjs-dist');
-            pdfjsLib = pdfjs;
-            // Set up worker path for PDF.js
-            if (typeof window === 'undefined') {
-                // Server-side: try to set worker path
-                try {
-                    pdfjsLib.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjsLib.version}/build/pdf.worker.min.js`;
-                } catch (workerError) {
-                    console.warn(
-                        'Could not set PDF.js worker path:',
-                        workerError,
-                    );
-                }
-            }
+            const pdf2picModule = await import('pdf2pic');
+            pdf2pic = pdf2picModule.default;
         } catch (error) {
-            console.warn('PDF.js not available:', error);
-            pdfjsLib = null;
+            console.warn('pdf2pic not available:', error);
+            pdf2pic = null;
         }
     }
-    return pdfjsLib;
+    return pdf2pic;
 }
 
-async function getCanvas() {
-    if (!Canvas) {
+async function getPoppler() {
+    if (!poppler) {
         try {
-            const canvasModule = await import('canvas');
-            Canvas = canvasModule;
+            const popplerModule = await import('pdf-poppler');
+            poppler = popplerModule.default || popplerModule;
         } catch (error) {
-            console.warn('Canvas not available:', error);
-            Canvas = null;
+            console.warn('pdf-poppler not available:', error);
+            poppler = null;
         }
     }
-    return Canvas;
+    return poppler;
 }
 
 // Async helper to dynamically import sharp in serverless environments
@@ -259,58 +245,71 @@ async function convertPdfPageToImageEnhanced(
 
         // Prioritize methods based on environment
         if (isVercelEnv) {
-            // On Vercel, prioritize PDF.js + Canvas (pure JS) first
+            // On Vercel, be more conservative - go straight to high-quality placeholders if conversion fails quickly
+            console.log(
+                '🔧 Vercel environment detected - using fallback-first strategy',
+            );
 
-            // Method 1: Try PDF.js + Canvas (pure JavaScript, most reliable on Vercel)
-            try {
-                return await convertPdfPageWithCanvas(pdfBuffer, pageNumber);
-            } catch (canvasError) {
-                console.warn(
-                    `PDF.js + Canvas failed for page ${pageNumber}:`,
-                    canvasError,
-                );
+            // Quick attempt at pdf-poppler (timeout quickly if not available)
+            const popplerModule = await getPoppler();
+            if (popplerModule) {
+                try {
+                    const conversionPromise = convertPdfPageWithPoppler(
+                        pdfBuffer,
+                        pageNumber,
+                    );
+                    const timeoutPromise = new Promise((_, reject) =>
+                        setTimeout(
+                            () => reject(new Error('Conversion timeout')),
+                            5000,
+                        ),
+                    );
+
+                    return (await Promise.race([
+                        conversionPromise,
+                        timeoutPromise,
+                    ])) as Buffer;
+                } catch (popplerError) {
+                    console.warn(
+                        `PDF-Poppler failed quickly for page ${pageNumber}:`,
+                        popplerError,
+                    );
+                }
             }
 
-            // Method 2: Try pdf-poppler (may work on some Vercel configurations)
-            try {
-                return await convertPdfPageWithPoppler(pdfBuffer, pageNumber);
-            } catch (popplerError) {
-                console.warn(
-                    `PDF-Poppler failed for page ${pageNumber}:`,
-                    popplerError,
-                );
-            }
+            // Skip other methods on Vercel and go straight to enhanced placeholder
+            console.log(
+                `🎨 Creating enhanced placeholder for Vercel deployment - page ${pageNumber}`,
+            );
+            return await createEnhancedPlaceholder(pdfBuffer, pageNumber);
         } else {
             // On localhost/other environments, try pdf2pic first (fastest when ImageMagick is available)
-
-            // Method 1: Try pdf2pic (requires ImageMagick - works great locally)
-            try {
-                return await convertPdfPageToImage(pdfBuffer, pageNumber);
-            } catch (pdf2picError) {
-                console.warn(
-                    `PDF2PIC failed for page ${pageNumber}:`,
-                    pdf2picError,
-                );
+            const pdf2picModule = await getPdf2Pic();
+            if (pdf2picModule) {
+                try {
+                    return await convertPdfPageToImage(pdfBuffer, pageNumber);
+                } catch (pdf2picError) {
+                    console.warn(
+                        `PDF2PIC failed for page ${pageNumber}:`,
+                        pdf2picError,
+                    );
+                }
             }
 
             // Method 2: Try pdf-poppler
-            try {
-                return await convertPdfPageWithPoppler(pdfBuffer, pageNumber);
-            } catch (popplerError) {
-                console.warn(
-                    `PDF-Poppler failed for page ${pageNumber}:`,
-                    popplerError,
-                );
-            }
-
-            // Method 3: Try PDF.js + Canvas
-            try {
-                return await convertPdfPageWithCanvas(pdfBuffer, pageNumber);
-            } catch (canvasError) {
-                console.warn(
-                    `PDF.js + Canvas failed for page ${pageNumber}:`,
-                    canvasError,
-                );
+            const popplerModule = await getPoppler();
+            if (popplerModule) {
+                try {
+                    return await convertPdfPageWithPoppler(
+                        pdfBuffer,
+                        pageNumber,
+                    );
+                } catch (popplerError) {
+                    console.warn(
+                        `PDF-Poppler failed for page ${pageNumber}:`,
+                        popplerError,
+                    );
+                }
             }
         }
 
@@ -330,83 +329,17 @@ async function convertPdfPageToImageEnhanced(
 }
 
 /**
- * Convert PDF page to image using PDF.js + Canvas (works on Vercel)
- */
-async function convertPdfPageWithCanvas(
-    pdfBuffer: Buffer,
-    pageNumber: number,
-): Promise<Buffer> {
-    try {
-        const pdfjs = await getPdfJs();
-        const canvas = await getCanvas();
-
-        if (!pdfjs || !canvas) {
-            throw new Error('PDF.js or Canvas not available');
-        }
-
-        console.log(`Using PDF.js + Canvas to convert page ${pageNumber}...`);
-
-        // Load PDF document
-        const typedArray = new Uint8Array(pdfBuffer);
-        const pdfDocument = await pdfjs.getDocument({ data: typedArray })
-            .promise;
-
-        // Get the specific page
-        const page = await pdfDocument.getPage(pageNumber);
-
-        // Set up canvas with high resolution
-        const scale = 2.0; // Higher scale for better quality
-        const viewport = page.getViewport({ scale });
-
-        const canvasEl = canvas.createCanvas(viewport.width, viewport.height);
-        const context = canvasEl.getContext('2d');
-
-        // Render PDF page to canvas
-        const renderContext = {
-            canvasContext: context,
-            viewport: viewport,
-        };
-
-        await page.render(renderContext).promise;
-
-        // Convert canvas to buffer
-        const buffer = canvasEl.toBuffer('image/jpeg', { quality: 0.9 });
-
-        console.log(
-            `✅ PDF.js + Canvas converted page ${pageNumber}, size: ${buffer.length} bytes`,
-        );
-
-        // Optimize with Sharp if available
-        const _sharp = await getSharp();
-        if (_sharp && buffer.length > 0) {
-            const optimizedBuffer = await _sharp(buffer)
-                .jpeg({ quality: 90, progressive: true })
-                .resize(1240, 1754, { fit: 'inside', withoutEnlargement: true })
-                .toBuffer();
-
-            console.log(
-                `✅ Optimized Canvas-rendered page ${pageNumber}, final size: ${optimizedBuffer.length} bytes`,
-            );
-            return optimizedBuffer;
-        }
-
-        return buffer;
-    } catch (error) {
-        console.error(
-            `PDF.js + Canvas conversion failed for page ${pageNumber}:`,
-            error,
-        );
-        throw error;
-    }
-}
-
-/**
  * Convert PDF page to image using pdf-poppler (Vercel compatible)
  */
 async function convertPdfPageWithPoppler(
     pdfBuffer: Buffer,
     pageNumber: number,
 ): Promise<Buffer> {
+    const popplerModule = await getPoppler();
+    if (!popplerModule) {
+        throw new Error('pdf-poppler not available');
+    }
+
     const tempPdfPath = path.join(
         '/tmp',
         `temp_pdf_${Date.now()}_${pageNumber}.pdf`,
@@ -426,7 +359,7 @@ async function convertPdfPageWithPoppler(
         };
 
         console.log(`Using pdf-poppler to convert page ${pageNumber}...`);
-        const result = await poppler.convert(tempPdfPath, options);
+        const result = await popplerModule.convert(tempPdfPath, options);
 
         if (!result || result.length === 0) {
             throw new Error('No conversion result from pdf-poppler');
@@ -565,6 +498,11 @@ async function convertPdfPageToImage(
     pageNumber: number,
 ): Promise<Buffer> {
     try {
+        const pdf2picModule = await getPdf2Pic();
+        if (!pdf2picModule) {
+            throw new Error('pdf2pic not available');
+        }
+
         console.log(`Converting PDF page ${pageNumber} to image...`);
 
         // Ensure ImageMagick and Ghostscript are in the PATH
@@ -583,7 +521,7 @@ async function convertPdfPageToImage(
         }
 
         // Configure pdf2pic to use ImageMagick
-        const convert = pdf2pic.fromBuffer(pdfBuffer, {
+        const convert = pdf2picModule.fromBuffer(pdfBuffer, {
             density: 200, // Higher density for better quality
             saveFilename: `page_${Date.now()}`,
             savePath: '/tmp',

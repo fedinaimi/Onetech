@@ -19,7 +19,6 @@
     "@tanstack/react-table": "^8.21.3",
     "@types/mongoose": "^5.11.96",
     "axios": "^1.11.0",
-    "canvas": "^3.2.0",
     "clsx": "^2.1.1",
     "exceljs": "^4.4.0",
     "form-data": "^4.0.4",
@@ -27,7 +26,6 @@
     "mongoose": "^8.18.0",
     "next": "15.5.2",
     "pdf-lib": "^1.17.1",
-    "pdf-poppler": "^0.2.1",
     "pdf2pic": "^3.2.0",
     "pdfjs-dist": "^5.4.149",
     "prisma": "^6.15.0",
@@ -38,7 +36,9 @@
     "undici": "^7.16.0"
   },
   "optionalDependencies": {
-    "sharp": "^0.33.5"
+    "sharp": "^0.33.5",
+    "canvas": "^3.2.0",
+    "pdf-poppler": "^0.2.1"
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3",
