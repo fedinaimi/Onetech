@@ -245,39 +245,12 @@ async function convertPdfPageToImageEnhanced(
 
         // Prioritize methods based on environment
         if (isVercelEnv) {
-            // On Vercel, be more conservative - go straight to high-quality placeholders if conversion fails quickly
+            // On Vercel, completely skip native library loading to avoid "linux is NOT supported" errors
             console.log(
-                '🔧 Vercel environment detected - using fallback-first strategy',
+                '🔧 Vercel environment detected - using safe fallback strategy',
             );
 
-            // Quick attempt at pdf-poppler (timeout quickly if not available)
-            const popplerModule = await getPoppler();
-            if (popplerModule) {
-                try {
-                    const conversionPromise = convertPdfPageWithPoppler(
-                        pdfBuffer,
-                        pageNumber,
-                    );
-                    const timeoutPromise = new Promise((_, reject) =>
-                        setTimeout(
-                            () => reject(new Error('Conversion timeout')),
-                            5000,
-                        ),
-                    );
-
-                    return (await Promise.race([
-                        conversionPromise,
-                        timeoutPromise,
-                    ])) as Buffer;
-                } catch (popplerError) {
-                    console.warn(
-                        `PDF-Poppler failed quickly for page ${pageNumber}:`,
-                        popplerError,
-                    );
-                }
-            }
-
-            // Skip other methods on Vercel and go straight to enhanced placeholder
+            // Go directly to enhanced placeholder without attempting any native conversions
             console.log(
                 `🎨 Creating enhanced placeholder for Vercel deployment - page ${pageNumber}`,
             );
