@@ -4,6 +4,50 @@ import path from 'path';
 import { PDFDocument } from 'pdf-lib';
 import pdf2pic from 'pdf2pic';
 import { promisify } from 'util';
+import poppler from 'pdf-poppler';
+
+// PDF.js imports for Canvas rendering fallback
+let pdfjsLib: any = null;
+let Canvas: any = null;
+
+// Lazy load PDF.js and Canvas for serverless compatibility
+async function getPdfJs() {
+    if (!pdfjsLib) {
+        try {
+            const pdfjs = await import('pdfjs-dist');
+            pdfjsLib = pdfjs;
+            // Set up worker path for PDF.js
+            if (typeof window === 'undefined') {
+                // Server-side: try to set worker path
+                try {
+                    pdfjsLib.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjsLib.version}/build/pdf.worker.min.js`;
+                } catch (workerError) {
+                    console.warn(
+                        'Could not set PDF.js worker path:',
+                        workerError,
+                    );
+                }
+            }
+        } catch (error) {
+            console.warn('PDF.js not available:', error);
+            pdfjsLib = null;
+        }
+    }
+    return pdfjsLib;
+}
+
+async function getCanvas() {
+    if (!Canvas) {
+        try {
+            const canvasModule = await import('canvas');
+            Canvas = canvasModule;
+        } catch (error) {
+            console.warn('Canvas not available:', error);
+            Canvas = null;
+        }
+    }
+    return Canvas;
+}
 
 // Async helper to dynamically import sharp in serverless environments
 let sharpInstance: any | null | undefined;
@@ -189,99 +233,321 @@ async function createPlaceholderImage(text: string): Promise<Buffer> {
 }
 
 /**
- * Enhanced PDF page to image conversion with better fallback
+ * Enhanced PDF page to image conversion with Vercel compatibility
  */
 async function convertPdfPageToImageEnhanced(
     pdfBuffer: Buffer,
     pageNumber: number,
 ): Promise<Buffer> {
+    // Detect environment for optimal conversion method selection
+    const isVercelEnv = !!(process.env.VERCEL || process.env.VERCEL_ENV || process.env.VERCEL_URL);
+    const isLocalDev = process.env.NODE_ENV === 'development';
+    
     try {
         console.log(
             `Converting PDF page ${pageNumber} to image (enhanced method)...`,
         );
+        console.log('Environment:', { 
+            isVercel: isVercelEnv, 
+            isDev: isLocalDev, 
+            nodeEnv: process.env.NODE_ENV 
+        });
 
-        // First try the existing pdf2pic method
-        return await convertPdfPageToImage(pdfBuffer, pageNumber);
-    } catch (error) {
-        console.error(`❌ Error with pdf2pic for page ${pageNumber}:`, error);
-
-        // Create an enhanced placeholder that shows more information
-        console.warn(`Creating enhanced placeholder for page ${pageNumber}`);
-
-        try {
-            // Try to extract some basic info from the PDF
-            const pdfDoc = await PDFDocument.load(pdfBuffer);
-            const page = pdfDoc.getPage(pageNumber - 1); // PDF-lib uses 0-based indexing
-            const { width, height } = page.getSize();
-
-            const _sharpEnhanced = await getSharp();
-            if (!_sharpEnhanced) {
-                // Fallback if Sharp is not available
-                return await createPlaceholderImage(`PDF Page ${pageNumber}`);
+        // Prioritize methods based on environment
+        if (isVercelEnv) {
+            // On Vercel, prioritize PDF.js + Canvas (pure JS) first
+            
+            // Method 1: Try PDF.js + Canvas (pure JavaScript, most reliable on Vercel)
+            try {
+                return await convertPdfPageWithCanvas(pdfBuffer, pageNumber);
+            } catch (canvasError) {
+                console.warn(
+                    `PDF.js + Canvas failed for page ${pageNumber}:`,
+                    canvasError,
+                );
             }
 
-            const placeholderImage = await _sharpEnhanced({
-                create: {
-                    width: 1240,
-                    height: 1754,
-                    channels: 3,
-                    background: { r: 255, g: 255, b: 255 },
-                },
-            })
-                .composite([
-                    {
-                        input: Buffer.from(`
-                    <svg width="1240" height="1754" xmlns="http://www.w3.org/2000/svg">
-                        <rect width="1240" height="1754" fill="#ffffff" stroke="#e5e7eb" stroke-width="2"/>
-                        <text x="620" y="400" text-anchor="middle" font-family="Arial, sans-serif" font-size="32" fill="#1f2937" font-weight="bold">
-                            📄 PDF Page ${pageNumber}
-                        </text>
-                        <text x="620" y="460" text-anchor="middle" font-family="Arial, sans-serif" font-size="20" fill="#6b7280">
-                            Original Size: ${Math.round(width)} × ${Math.round(height)} pt
-                        </text>
-                        <text x="620" y="500" text-anchor="middle" font-family="Arial, sans-serif" font-size="18" fill="#9ca3af">
-                            PDF Buffer Size: ${(pdfBuffer.length / 1024).toFixed(1)} KB
-                        </text>
-                        <text x="620" y="580" text-anchor="middle" font-family="Arial, sans-serif" font-size="16" fill="#6b7280">
-                            ⚠️ System conversion not available
-                        </text>
-                        <text x="620" y="620" text-anchor="middle" font-family="Arial, sans-serif" font-size="14" fill="#9ca3af">
-                            This placeholder represents the PDF page content
-                        </text>
-                        <text x="620" y="650" text-anchor="middle" font-family="Arial, sans-serif" font-size="14" fill="#9ca3af">
-                            The actual document data will still be processed correctly
-                        </text>
-                        
-                        <!-- Add a visual representation -->
-                        <rect x="420" y="720" width="400" height="500" fill="#f9fafb" stroke="#d1d5db" stroke-width="1" rx="8"/>
-                        <text x="620" y="750" text-anchor="middle" font-family="Arial, sans-serif" font-size="12" fill="#374151">
-                            PDF CONTENT AREA
-                        </text>
-                        <line x1="440" y1="780" x2="800" y2="780" stroke="#e5e7eb" stroke-width="1"/>
-                        <line x1="440" y1="800" x2="760" y2="800" stroke="#e5e7eb" stroke-width="1"/>
-                        <line x1="440" y1="820" x2="780" y2="820" stroke="#e5e7eb" stroke-width="1"/>
-                        <line x1="440" y1="840" x2="720" y2="840" stroke="#e5e7eb" stroke-width="1"/>
-                        <line x1="440" y1="860" x2="800" y2="860" stroke="#e5e7eb" stroke-width="1"/>
-                    </svg>
-                `),
-                        gravity: 'center',
-                    },
-                ])
-                .jpeg({ quality: 85 })
+            // Method 2: Try pdf-poppler (may work on some Vercel configurations)
+            try {
+                return await convertPdfPageWithPoppler(pdfBuffer, pageNumber);
+            } catch (popplerError) {
+                console.warn(
+                    `PDF-Poppler failed for page ${pageNumber}:`,
+                    popplerError,
+                );
+            }
+        } else {
+            // On localhost/other environments, try pdf2pic first (fastest when ImageMagick is available)
+            
+            // Method 1: Try pdf2pic (requires ImageMagick - works great locally)
+            try {
+                return await convertPdfPageToImage(pdfBuffer, pageNumber);
+            } catch (pdf2picError) {
+                console.warn(
+                    `PDF2PIC failed for page ${pageNumber}:`,
+                    pdf2picError,
+                );
+            }
+
+            // Method 2: Try pdf-poppler 
+            try {
+                return await convertPdfPageWithPoppler(pdfBuffer, pageNumber);
+            } catch (popplerError) {
+                console.warn(
+                    `PDF-Poppler failed for page ${pageNumber}:`,
+                    popplerError,
+                );
+            }
+
+            // Method 3: Try PDF.js + Canvas
+            try {
+                return await convertPdfPageWithCanvas(pdfBuffer, pageNumber);
+            } catch (canvasError) {
+                console.warn(
+                    `PDF.js + Canvas failed for page ${pageNumber}:`,
+                    canvasError,
+                );
+            }
+        }
+
+        // Final fallback: Create a high-quality placeholder
+        console.warn(`All conversion methods failed, creating enhanced placeholder for page ${pageNumber}`);
+        return await createEnhancedPlaceholder(pdfBuffer, pageNumber);
+    } catch (error) {
+        console.error(
+            `❌ All conversion methods failed for page ${pageNumber}:`,
+            error,
+        );
+        // Ultimate fallback
+        return await createPlaceholderImage(`PDF Page ${pageNumber}`);
+    }
+}
+
+/**
+ * Convert PDF page to image using PDF.js + Canvas (works on Vercel)
+ */
+async function convertPdfPageWithCanvas(
+    pdfBuffer: Buffer,
+    pageNumber: number,
+): Promise<Buffer> {
+    try {
+        const pdfjs = await getPdfJs();
+        const canvas = await getCanvas();
+
+        if (!pdfjs || !canvas) {
+            throw new Error('PDF.js or Canvas not available');
+        }
+
+        console.log(`Using PDF.js + Canvas to convert page ${pageNumber}...`);
+
+        // Load PDF document
+        const typedArray = new Uint8Array(pdfBuffer);
+        const pdfDocument = await pdfjs.getDocument({ data: typedArray })
+            .promise;
+
+        // Get the specific page
+        const page = await pdfDocument.getPage(pageNumber);
+
+        // Set up canvas with high resolution
+        const scale = 2.0; // Higher scale for better quality
+        const viewport = page.getViewport({ scale });
+
+        const canvasEl = canvas.createCanvas(viewport.width, viewport.height);
+        const context = canvasEl.getContext('2d');
+
+        // Render PDF page to canvas
+        const renderContext = {
+            canvasContext: context,
+            viewport: viewport,
+        };
+
+        await page.render(renderContext).promise;
+
+        // Convert canvas to buffer
+        const buffer = canvasEl.toBuffer('image/jpeg', { quality: 0.9 });
+
+        console.log(
+            `✅ PDF.js + Canvas converted page ${pageNumber}, size: ${buffer.length} bytes`,
+        );
+
+        // Optimize with Sharp if available
+        const _sharp = await getSharp();
+        if (_sharp && buffer.length > 0) {
+            const optimizedBuffer = await _sharp(buffer)
+                .jpeg({ quality: 90, progressive: true })
+                .resize(1240, 1754, { fit: 'inside', withoutEnlargement: true })
                 .toBuffer();
 
             console.log(
-                `✅ Created enhanced placeholder for page ${pageNumber}, size: ${placeholderImage.length} bytes`,
+                `✅ Optimized Canvas-rendered page ${pageNumber}, final size: ${optimizedBuffer.length} bytes`,
             );
-            return placeholderImage;
-        } catch (placeholderError) {
-            console.error(
-                'Failed to create enhanced placeholder:',
-                placeholderError,
+            return optimizedBuffer;
+        }
+
+        return buffer;
+    } catch (error) {
+        console.error(
+            `PDF.js + Canvas conversion failed for page ${pageNumber}:`,
+            error,
+        );
+        throw error;
+    }
+}
+
+/**
+ * Convert PDF page to image using pdf-poppler (Vercel compatible)
+ */
+async function convertPdfPageWithPoppler(
+    pdfBuffer: Buffer,
+    pageNumber: number,
+): Promise<Buffer> {
+    const tempPdfPath = path.join(
+        '/tmp',
+        `temp_pdf_${Date.now()}_${pageNumber}.pdf`,
+    );
+
+    try {
+        // Write PDF buffer to temp file
+        fs.writeFileSync(tempPdfPath, pdfBuffer);
+
+        const options = {
+            format: 'jpeg' as const,
+            out_dir: '/tmp',
+            out_prefix: `page_${Date.now()}_${pageNumber}`,
+            page: pageNumber,
+            scale: 2048, // High scale for better quality
+            antialias: 'gray' as const,
+        };
+
+        console.log(`Using pdf-poppler to convert page ${pageNumber}...`);
+        const result = await poppler.convert(tempPdfPath, options);
+
+        if (!result || result.length === 0) {
+            throw new Error('No conversion result from pdf-poppler');
+        }
+
+        const imagePath = result[0].path;
+        const imageBuffer = fs.readFileSync(imagePath);
+
+        // Clean up temp files
+        deleteTempFile(tempPdfPath);
+        deleteTempFile(imagePath);
+
+        console.log(
+            `✅ PDF-Poppler converted page ${pageNumber}, size: ${imageBuffer.length} bytes`,
+        );
+
+        // Optimize with Sharp if available
+        const _sharp = await getSharp();
+        if (_sharp && imageBuffer.length > 0) {
+            const optimizedBuffer = await _sharp(imageBuffer)
+                .jpeg({ quality: 90, progressive: true })
+                .resize(1240, 1754, { fit: 'inside', withoutEnlargement: true })
+                .toBuffer();
+
+            console.log(
+                `✅ Optimized page ${pageNumber} with Sharp, final size: ${optimizedBuffer.length} bytes`,
             );
-            // Final fallback
+            return optimizedBuffer;
+        }
+
+        return imageBuffer;
+    } catch (error) {
+        // Clean up temp file if it exists
+        deleteTempFile(tempPdfPath);
+        console.error(
+            `PDF-Poppler conversion failed for page ${pageNumber}:`,
+            error,
+        );
+        throw error;
+    }
+}
+
+/**
+ * Create an enhanced placeholder that looks more like a real PDF page
+ */
+async function createEnhancedPlaceholder(
+    pdfBuffer: Buffer,
+    pageNumber: number,
+): Promise<Buffer> {
+    try {
+        // Try to extract some basic info from the PDF
+        const pdfDoc = await PDFDocument.load(pdfBuffer);
+        const page = pdfDoc.getPage(pageNumber - 1); // PDF-lib uses 0-based indexing
+        const { width, height } = page.getSize();
+
+        const _sharp = await getSharp();
+        if (!_sharp) {
             return await createPlaceholderImage(`PDF Page ${pageNumber}`);
         }
+
+        const placeholderImage = await _sharp({
+            create: {
+                width: 1240,
+                height: 1754,
+                channels: 3,
+                background: { r: 255, g: 255, b: 255 },
+            },
+        })
+            .composite([
+                {
+                    input: Buffer.from(`
+                <svg width="1240" height="1754" xmlns="http://www.w3.org/2000/svg">
+                    <defs>
+                        <pattern id="paper" patternUnits="userSpaceOnUse" width="40" height="40">
+                            <rect width="40" height="40" fill="#fefefe"/>
+                            <circle cx="20" cy="20" r="0.5" fill="#f0f0f0"/>
+                        </pattern>
+                    </defs>
+                    <rect width="1240" height="1754" fill="url(#paper)" stroke="#e5e7eb" stroke-width="2"/>
+                    
+                    <!-- Header -->
+                    <rect x="80" y="80" width="1080" height="60" fill="#f8f9fa" stroke="#e5e7eb" stroke-width="1" rx="4"/>
+                    <text x="620" y="115" text-anchor="middle" font-family="Arial, sans-serif" font-size="24" fill="#374151" font-weight="bold">
+                        📄 PDF Page ${pageNumber}
+                    </text>
+                    
+                    <!-- Content area simulation -->
+                    <rect x="120" y="200" width="1000" height="1400" fill="#fdfdfd" stroke="#e5e7eb" stroke-width="1" rx="8"/>
+                    
+                    <!-- Simulate text lines -->
+                    <g fill="#d1d5db" opacity="0.7">
+                        ${Array.from({ length: 45 }, (_, i) => {
+                            const y = 240 + i * 30;
+                            const width = 800 + Math.random() * 150;
+                            return `<rect x="160" y="${y}" width="${width}" height="12" rx="2"/>`;
+                        }).join('')}
+                    </g>
+                    
+                    <!-- Info footer -->
+                    <rect x="120" y="1620" width="1000" height="80" fill="#f1f5f9" stroke="#e5e7eb" stroke-width="1" rx="4"/>
+                    <text x="620" y="1645" text-anchor="middle" font-family="Arial, sans-serif" font-size="14" fill="#64748b">
+                        Original Size: ${Math.round(width)} × ${Math.round(height)} pt • Buffer: ${(pdfBuffer.length / 1024).toFixed(1)} KB
+                    </text>
+                    <text x="620" y="1665" text-anchor="middle" font-family="Arial, sans-serif" font-size="12" fill="#94a3b8">
+                        High-quality placeholder - PDF content will be processed normally
+                    </text>
+                    <text x="620" y="1685" text-anchor="middle" font-family="Arial, sans-serif" font-size="11" fill="#cbd5e1">
+                        PDF rendering temporarily unavailable - using enhanced preview
+                    </text>
+                </svg>
+            `),
+                    gravity: 'center',
+                },
+            ])
+            .jpeg({ quality: 85 })
+            .toBuffer();
+
+        console.log(
+            `✅ Created enhanced placeholder for page ${pageNumber}, size: ${placeholderImage.length} bytes`,
+        );
+        return placeholderImage;
+    } catch (placeholderError) {
+        console.error(
+            'Failed to create enhanced placeholder:',
+            placeholderError,
+        );
+        return await createPlaceholderImage(`PDF Page ${pageNumber}`);
     }
 }
 
