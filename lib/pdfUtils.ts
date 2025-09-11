@@ -240,23 +240,27 @@ async function convertPdfPageToImageEnhanced(
     pageNumber: number,
 ): Promise<Buffer> {
     // Detect environment for optimal conversion method selection
-    const isVercelEnv = !!(process.env.VERCEL || process.env.VERCEL_ENV || process.env.VERCEL_URL);
+    const isVercelEnv = !!(
+        process.env.VERCEL ||
+        process.env.VERCEL_ENV ||
+        process.env.VERCEL_URL
+    );
     const isLocalDev = process.env.NODE_ENV === 'development';
-    
+
     try {
         console.log(
             `Converting PDF page ${pageNumber} to image (enhanced method)...`,
         );
-        console.log('Environment:', { 
-            isVercel: isVercelEnv, 
-            isDev: isLocalDev, 
-            nodeEnv: process.env.NODE_ENV 
+        console.log('Environment:', {
+            isVercel: isVercelEnv,
+            isDev: isLocalDev,
+            nodeEnv: process.env.NODE_ENV,
         });
 
         // Prioritize methods based on environment
         if (isVercelEnv) {
             // On Vercel, prioritize PDF.js + Canvas (pure JS) first
-            
+
             // Method 1: Try PDF.js + Canvas (pure JavaScript, most reliable on Vercel)
             try {
                 return await convertPdfPageWithCanvas(pdfBuffer, pageNumber);
@@ -278,7 +282,7 @@ async function convertPdfPageToImageEnhanced(
             }
         } else {
             // On localhost/other environments, try pdf2pic first (fastest when ImageMagick is available)
-            
+
             // Method 1: Try pdf2pic (requires ImageMagick - works great locally)
             try {
                 return await convertPdfPageToImage(pdfBuffer, pageNumber);
@@ -289,7 +293,7 @@ async function convertPdfPageToImageEnhanced(
                 );
             }
 
-            // Method 2: Try pdf-poppler 
+            // Method 2: Try pdf-poppler
             try {
                 return await convertPdfPageWithPoppler(pdfBuffer, pageNumber);
             } catch (popplerError) {
@@ -311,7 +315,9 @@ async function convertPdfPageToImageEnhanced(
         }
 
         // Final fallback: Create a high-quality placeholder
-        console.warn(`All conversion methods failed, creating enhanced placeholder for page ${pageNumber}`);
+        console.warn(
+            `All conversion methods failed, creating enhanced placeholder for page ${pageNumber}`,
+        );
         return await createEnhancedPlaceholder(pdfBuffer, pageNumber);
     } catch (error) {
         console.error(
