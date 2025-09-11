@@ -575,21 +575,19 @@ export default function HomePage() {
             setSelectedDocument,
         };
 
-        // Debug logging
-        console.log('renderTableData debug:', {
-            selectedType,
-            docDataKeys: Object.keys(doc.data || {}),
-            hasItems: !!doc.data?.items,
-            hasDowntimeEvents: !!doc.data?.downtime_events,
-            hasTeamSummary: !!doc.data?.team_summary,
-            documentType: doc.data?.document_type,
-        });
+        // Check data structure and render appropriate table
+        const hasRebutData = doc.data?.items && Array.isArray(doc.data.items);
+        const hasNPTData =
+            doc.data?.downtime_events &&
+            Array.isArray(doc.data.downtime_events);
+        const hasKosuData =
+            doc.data?.team_summary && typeof doc.data.team_summary === 'object';
 
-        if (selectedType === 'Rebut' && doc.data?.items)
+        if (selectedType === 'Rebut' && hasRebutData)
             return <RebutTable {...tableProps} />;
-        if (selectedType === 'NPT' && doc.data?.downtime_events)
+        if (selectedType === 'NPT' && hasNPTData)
             return <NPTTable {...tableProps} />;
-        if (selectedType === 'Kosu' && doc.data?.team_summary)
+        if (selectedType === 'Kosu' && hasKosuData)
             return <KosuTable {...tableProps} />;
 
         return (

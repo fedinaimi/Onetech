@@ -1,5 +1,3 @@
-'use server';
-
 import { splitFileIntoPages } from '@/lib/pdfUtils';
 import { NextRequest, NextResponse } from 'next/server';
 
