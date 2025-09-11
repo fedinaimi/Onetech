@@ -7,6 +7,7 @@ import { promisify } from 'util';
 // Optional imports that may not be available in all environments
 let pdf2pic: any = null;
 let poppler: any = null;
+let pdfjs: any = null;
 
 // Lazy load optional dependencies
 async function getPdf2Pic() {
@@ -33,6 +34,29 @@ async function getPoppler() {
         }
     }
     return poppler;
+}
+
+async function getPdfJs() {
+    if (!pdfjs) {
+        try {
+            // Import PDF.js for SVG rendering (works without Canvas)
+            const pdfjsModule = await import('pdfjs-dist');
+            pdfjs = pdfjsModule;
+
+            // Set up worker for server-side rendering
+            if (typeof window === 'undefined') {
+                try {
+                    pdfjs.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.js`;
+                } catch (workerError) {
+                    console.warn('PDF.js worker setup failed:', workerError);
+                }
+            }
+        } catch (error) {
+            console.warn('PDF.js not available:', error);
+            pdfjs = null;
+        }
+    }
+    return pdfjs;
 }
 
 // Async helper to dynamically import sharp in serverless environments
@@ -219,6 +243,108 @@ async function createPlaceholderImage(text: string): Promise<Buffer> {
 }
 
 /**
+ * Convert PDF page to SVG using PDF.js and then to image with Sharp (Vercel compatible)
+ */
+async function convertPdfPageWithSvg(
+    pdfBuffer: Buffer,
+    pageNumber: number,
+): Promise<Buffer> {
+    try {
+        const pdfjsModule = await getPdfJs();
+        if (!pdfjsModule) {
+            throw new Error('PDF.js not available');
+        }
+
+        console.log(`Using PDF.js SVG rendering for page ${pageNumber}...`);
+
+        // Load PDF document
+        const typedArray = new Uint8Array(pdfBuffer);
+        const pdfDocument = await pdfjsModule.getDocument({ data: typedArray })
+            .promise;
+
+        // Get the specific page
+        const page = await pdfDocument.getPage(pageNumber);
+
+        // Set up viewport with good resolution
+        const scale = 2.0;
+        const viewport = page.getViewport({ scale });
+
+        // Get text content for better rendering
+        const textContent = await page.getTextContent();
+
+        // Create SVG representation
+
+        // Convert to SVG string (this is a simplified approach)
+        const svgWidth = Math.round(viewport.width);
+        const svgHeight = Math.round(viewport.height);
+
+        // Create a basic SVG representation
+        let svgString = `
+            <svg width="${svgWidth}" height="${svgHeight}" xmlns="http://www.w3.org/2000/svg">
+                <rect width="100%" height="100%" fill="white"/>
+        `;
+
+        // Add text content to SVG
+        if (textContent && textContent.items) {
+            for (const item of textContent.items) {
+                if ((item as any).str && (item as any).transform) {
+                    const x = (item as any).transform[4] * scale;
+                    const y = svgHeight - (item as any).transform[5] * scale; // Flip Y coordinate
+                    const fontSize = (item as any).transform[0] * scale || 12;
+
+                    const escapeMap: { [key: string]: string } = {
+                        '<': '&lt;',
+                        '>': '&gt;',
+                        '&': '&amp;',
+                        '"': '&quot;',
+                        "'": '&#39;',
+                    };
+
+                    const escapedText = (item as any).str.replace(
+                        /[<>&"']/g,
+                        (c: string) => escapeMap[c] || c,
+                    );
+
+                    svgString += `
+                        <text x="${x}" y="${y}" font-size="${fontSize}" font-family="Arial, sans-serif" fill="black">
+                            ${escapedText}
+                        </text>
+                    `;
+                }
+            }
+        }
+
+        svgString += '</svg>';
+
+        console.log(
+            `✅ Generated SVG for page ${pageNumber}, size: ${svgString.length} characters`,
+        );
+
+        // Convert SVG to image using Sharp
+        const _sharp = await getSharp();
+        if (_sharp) {
+            const imageBuffer = await _sharp(Buffer.from(svgString))
+                .jpeg({ quality: 90 })
+                .resize(1240, 1754, { fit: 'inside', withoutEnlargement: true })
+                .toBuffer();
+
+            console.log(
+                `✅ SVG converted to image for page ${pageNumber}, size: ${imageBuffer.length} bytes`,
+            );
+            return imageBuffer;
+        } else {
+            throw new Error('Sharp not available for SVG conversion');
+        }
+    } catch (error) {
+        console.error(
+            `PDF.js SVG conversion failed for page ${pageNumber}:`,
+            error,
+        );
+        throw error;
+    }
+}
+
+/**
  * Enhanced PDF page to image conversion with Vercel compatibility
  */
 async function convertPdfPageToImageEnhanced(
@@ -245,12 +371,22 @@ async function convertPdfPageToImageEnhanced(
 
         // Prioritize methods based on environment
         if (isVercelEnv) {
-            // On Vercel, completely skip native library loading to avoid "linux is NOT supported" errors
+            // On Vercel, try PDF.js SVG rendering first (pure JavaScript, no native deps)
             console.log(
-                '🔧 Vercel environment detected - using safe fallback strategy',
+                '🔧 Vercel environment detected - trying PDF.js SVG rendering',
             );
 
-            // Go directly to enhanced placeholder without attempting any native conversions
+            // Method 1: Try PDF.js SVG rendering (works on Vercel)
+            try {
+                return await convertPdfPageWithSvg(pdfBuffer, pageNumber);
+            } catch (svgError) {
+                console.warn(
+                    `PDF.js SVG rendering failed for page ${pageNumber}:`,
+                    svgError,
+                );
+            }
+
+            // Fallback: Enhanced placeholder
             console.log(
                 `🎨 Creating enhanced placeholder for Vercel deployment - page ${pageNumber}`,
             );
