@@ -8,8 +8,11 @@ import {
 } from '@/lib/pdfUtils';
 import { NextRequest, NextResponse } from 'next/server';
 
+// Force Node.js runtime (sharp is a native module)
+export const runtime = 'nodejs';
+
 // Allow this API route to run longer to accommodate slow backend
-export const maxDuration = 300;
+export const maxDuration = 600;
 
 const ONETECH_API_URL =
     process.env.NEXT_PUBLIC_EXTRACT_API ||

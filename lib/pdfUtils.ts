@@ -1,10 +1,18 @@
+import { exec } from 'child_process';
 import fs from 'fs';
 import path from 'path';
 import { PDFDocument } from 'pdf-lib';
 import pdf2pic from 'pdf2pic';
 import sharp from 'sharp';
-import { exec } from 'child_process';
 import { promisify } from 'util';
+// Lazy-load sharp to avoid loading native module in non-Node runtimes (e.g., Edge)
+let __sharp: any | null = null;
+async function getSharp() {
+    if (__sharp) return __sharp;
+    const mod = await import('sharp');
+    __sharp = (mod as any).default || mod;
+    return __sharp;
+}
 
 export interface PageFile {
     pageNumber: number;
@@ -98,6 +106,7 @@ export async function splitPdfIntoPages(
  */
 async function createPlaceholderImage(text: string): Promise<Buffer> {
     try {
+        const sharp = await getSharp();
         const placeholderImage = await sharp({
             create: {
                 width: 1240,
@@ -165,6 +174,7 @@ async function convertPdfPageToImageEnhanced(
             const page = pdfDoc.getPage(pageNumber - 1); // PDF-lib uses 0-based indexing
             const { width, height } = page.getSize();
 
+            const sharp = await getSharp();
             const placeholderImage = await sharp({
                 create: {
                     width: 1240,
@@ -294,6 +304,7 @@ async function convertPdfPageToImage(
         );
 
         // Optimize the image with Sharp
+        const sharp = await getSharp();
         const optimizedBuffer = await sharp(imageBuffer)
             .jpeg({ quality: 90, progressive: true })
             .resize(1240, 1754, { fit: 'inside', withoutEnlargement: true })

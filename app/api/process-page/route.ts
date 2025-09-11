@@ -2,6 +2,7 @@ import { getDocuments, saveDocument } from '@/lib/documentUtils';
 import dbConnect from '@/lib/mongodb';
 import { createFileFromBuffer } from '@/lib/pdfUtils';
 import { NextRequest, NextResponse } from 'next/server';
+export const runtime = 'nodejs';
 // Use undici Agent to tune fetch behavior (timeouts/keep-alive)
 // Using `any` typing to avoid a hard type dependency on undici in TS build
 let undiciAgent: any | undefined;
