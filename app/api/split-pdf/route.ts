@@ -1,8 +1,7 @@
+'use server';
+
 import { splitFileIntoPages } from '@/lib/pdfUtils';
 import { NextRequest, NextResponse } from 'next/server';
-
-// Force Node.js runtime for native modules
-export const runtime = 'nodejs';
 
 export async function POST(request: NextRequest) {
     console.log('=== PDF SPLIT API CALLED ===');

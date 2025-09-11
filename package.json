@@ -4,11 +4,12 @@
   "private": true,
   "scripts": {
     "dev": "next dev --turbopack",
-    "build": "next build --turbopack",
+    "build": "next build",
     "start": "next start",
     "lint": "next lint --fix",
     "seed": "tsx scripts/seed.ts",
-    "setup": "node scripts/setup.js"
+    "setup": "node scripts/setup.js",
+    "postinstall": "npm rebuild sharp || true"
   },
   "dependencies": {
     "@prisma/client": "^6.15.0",
@@ -32,10 +33,12 @@
     "prisma": "^6.15.0",
     "react": "19.1.0",
     "react-dom": "19.1.0",
-    "sharp": "^0.34.3",
     "sqlite3": "^5.1.7",
     "tailwind-merge": "^3.3.1",
     "undici": "^7.16.0"
+  },
+  "optionalDependencies": {
+    "sharp": "^0.33.5"
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3",

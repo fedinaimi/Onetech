@@ -233,7 +233,7 @@ export default function PageProcessor({
         };
 
         startProcessing();
-    }, [pages.length, onAllComplete, processPage]); // Fixed dependencies
+    }, [pages.length, onAllComplete, processPage, pages]); // Fixed dependencies
 
     const getStatusIcon = (
         status: PageStatus,

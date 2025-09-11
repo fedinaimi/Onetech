@@ -575,19 +575,11 @@ export default function HomePage() {
             setSelectedDocument,
         };
 
-        // Check data structure and render appropriate table
-        const hasRebutData = doc.data?.items && Array.isArray(doc.data.items);
-        const hasNPTData =
-            doc.data?.downtime_events &&
-            Array.isArray(doc.data.downtime_events);
-        const hasKosuData =
-            doc.data?.team_summary && typeof doc.data.team_summary === 'object';
-
-        if (selectedType === 'Rebut' && hasRebutData)
+        if (selectedType === 'Rebut' && doc.data.items)
             return <RebutTable {...tableProps} />;
-        if (selectedType === 'NPT' && hasNPTData)
+        if (selectedType === 'NPT' && doc.data.downtime_events)
             return <NPTTable {...tableProps} />;
-        if (selectedType === 'Kosu' && hasKosuData)
+        if (selectedType === 'Kosu' && doc.data.team_summary)
             return <KosuTable {...tableProps} />;
 
         return (

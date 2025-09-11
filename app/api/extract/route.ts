@@ -8,35 +8,36 @@ import {
 } from '@/lib/pdfUtils';
 import { NextRequest, NextResponse } from 'next/server';
 
-// Force Node.js runtime (sharp is a native module)
-export const runtime = 'nodejs';
-
-// Allow this API route to run longer to accommodate slow backend
+// Allow this API route to run for up to 5 minutes
 export const maxDuration = 300;
 
 const ONETECH_API_URL =
     process.env.NEXT_PUBLIC_EXTRACT_API ||
     'http://onetech-backend-gdl7h722ruzvs.francecentral.azurecontainer.io:8000/extract/';
 
-// Undici agent for better timeout handling (dynamic import, no require)
+// Undici agent for better timeout handling
 let undiciAgent: any = null;
-async function getUndiciAgent(): Promise<any | undefined> {
-    if (undiciAgent) return undiciAgent;
-    try {
-        const undici = await import('undici');
-        const Agent = (undici as any).Agent;
-        undiciAgent = new Agent({
-            headersTimeout: 0,
-            bodyTimeout: 0,
-            keepAliveTimeout: 1000,
-            keepAliveMaxTimeout: 2000,
-            connectTimeout: 15000,
-        });
-        return undiciAgent;
-    } catch (error) {
-        console.warn('Failed to create undici agent:', error);
-        return undefined;
+
+function getUndiciAgent() {
+    if (!undiciAgent) {
+        try {
+            // eslint-disable-next-line @typescript-eslint/no-require-imports
+            const { Agent } = require('undici');
+            undiciAgent = new Agent({
+                // Give plenty of time for slow backend to send headers/body
+                headersTimeout: 0,
+                bodyTimeout: 0,
+                // Keep connections short-lived to reduce sticky keep-alive issues
+                keepAliveTimeout: 1000,
+                keepAliveMaxTimeout: 2000,
+                // Reasonable connect timeout
+                connectTimeout: 15000,
+            });
+        } catch (error) {
+            console.warn('Failed to create undici agent:', error);
+        }
     }
+    return undiciAgent;
 }
 
 interface ProcessResult {
@@ -66,20 +67,16 @@ async function processPageWithExternalAPI(
 
         console.log(`Page ${pageNumber} - Making single API call`);
 
-        const pageFetchOptions: RequestInit & { dispatcher?: any } = {
+        const response = await fetch(ONETECH_API_URL, {
             method: 'POST',
             body: apiFormData,
             headers: {
                 Accept: 'application/json',
                 'User-Agent': 'Onetech-Document-Extractor/1.0',
             },
-            signal: AbortSignal.timeout(300000), // 5 minutes per page
+            signal: AbortSignal.timeout(300000), // 5 minutes timeout per page
             keepalive: false,
-        };
-        const pageAgent = await getUndiciAgent();
-        if (pageAgent) pageFetchOptions.dispatcher = pageAgent;
-
-        const response = await fetch(ONETECH_API_URL, pageFetchOptions);
+        });
 
         console.log(`Page ${pageNumber} - Response:`, {
             status: response.status,
@@ -215,18 +212,18 @@ async function processImageDirectly(
         });
 
         // Use the same timeout and undici configuration as process-page
-        const fetchOptions: RequestInit & { dispatcher?: any } = {
+        const fetchOptions: any = {
             method: 'POST',
             body: apiFormData,
             headers: {
                 Accept: 'application/json',
                 'User-Agent': 'Onetech-Document-Extractor/1.0',
             },
-            // No AbortSignal here: allow long-running image processing beyond 5 minutes
+            signal: AbortSignal.timeout(300000), // 5 minutes timeout
         };
 
         // Use undici dispatcher if available
-        const agent = await getUndiciAgent();
+        const agent = getUndiciAgent();
         if (agent) {
             fetchOptions.dispatcher = agent;
         }

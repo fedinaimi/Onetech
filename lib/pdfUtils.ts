@@ -3,15 +3,51 @@ import fs from 'fs';
 import path from 'path';
 import { PDFDocument } from 'pdf-lib';
 import pdf2pic from 'pdf2pic';
-import sharp from 'sharp';
 import { promisify } from 'util';
-// Lazy-load sharp to avoid loading native module in non-Node runtimes (e.g., Edge)
-let __sharp: any | null = null;
-async function getSharp() {
-    if (__sharp) return __sharp;
-    const mod = await import('sharp');
-    __sharp = (mod as any).default || mod;
-    return __sharp;
+
+// Async helper to dynamically import sharp in serverless environments
+let sharpInstance: any | null | undefined;
+async function getSharp(): Promise<any | null> {
+    if (sharpInstance !== undefined) return sharpInstance;
+
+    try {
+        // Try to import sharp with better error handling for Vercel
+        let sharp;
+
+        if (typeof window === 'undefined') {
+            // Server-side: try to import sharp
+            try {
+                const sharpModule = await import('sharp');
+                sharp = sharpModule.default || sharpModule;
+            } catch (importError) {
+                console.warn('Sharp module not available:', {
+                    importError:
+                        importError instanceof Error
+                            ? importError.message
+                            : String(importError),
+                    platform: process.platform,
+                    arch: process.arch,
+                    nodeVersion: process.version,
+                });
+                throw new Error('Sharp unavailable');
+            }
+        }
+
+        sharpInstance = sharp;
+        return sharpInstance;
+    } catch (err) {
+        console.warn(
+            'Sharp not available, using fallback image processing. Error:',
+            err instanceof Error ? err.message : 'Unknown error',
+            {
+                platform: process.platform,
+                arch: process.arch,
+                nodeVersion: process.version,
+            },
+        );
+        sharpInstance = null;
+        return null;
+    }
 }
 
 export interface PageFile {
@@ -45,7 +81,6 @@ export async function splitPdfIntoPages(
             console.log(`🔄 Processing page ${pageNumber}/${pageCount}...`);
 
             let imageBuffer: Buffer;
-
             if (pageCount === 1) {
                 // For single page PDFs, use the original buffer
                 imageBuffer = await convertPdfPageToImageEnhanced(
@@ -106,8 +141,13 @@ export async function splitPdfIntoPages(
  */
 async function createPlaceholderImage(text: string): Promise<Buffer> {
     try {
-        const sharp = await getSharp();
-        const placeholderImage = await sharp({
+        const _sharp = await getSharp();
+        if (!_sharp) {
+            // Fallback: return minimal buffer if Sharp is not available
+            return Buffer.from(`PDF Page: ${text}`);
+        }
+
+        const placeholderImage = await _sharp({
             create: {
                 width: 1240,
                 height: 1754,
@@ -174,8 +214,13 @@ async function convertPdfPageToImageEnhanced(
             const page = pdfDoc.getPage(pageNumber - 1); // PDF-lib uses 0-based indexing
             const { width, height } = page.getSize();
 
-            const sharp = await getSharp();
-            const placeholderImage = await sharp({
+            const _sharpEnhanced = await getSharp();
+            if (!_sharpEnhanced) {
+                // Fallback if Sharp is not available
+                return await createPlaceholderImage(`PDF Page ${pageNumber}`);
+            }
+
+            const placeholderImage = await _sharpEnhanced({
                 create: {
                     width: 1240,
                     height: 1754,
@@ -303,12 +348,21 @@ async function convertPdfPageToImage(
             `✅ Successfully converted page ${pageNumber}, buffer size: ${imageBuffer.length} bytes`,
         );
 
-        // Optimize the image with Sharp
-        const sharp = await getSharp();
-        const optimizedBuffer = await sharp(imageBuffer)
-            .jpeg({ quality: 90, progressive: true })
-            .resize(1240, 1754, { fit: 'inside', withoutEnlargement: true })
-            .toBuffer();
+        // Optimize the image with Sharp if available
+        let optimizedBuffer: Buffer;
+        const _sharp = await getSharp();
+        if (_sharp) {
+            optimizedBuffer = await _sharp(imageBuffer)
+                .jpeg({ quality: 90, progressive: true })
+                .resize(1240, 1754, { fit: 'inside', withoutEnlargement: true })
+                .toBuffer();
+        } else {
+            // Fallback: return original image buffer if Sharp is not available
+            optimizedBuffer = imageBuffer;
+            console.warn(
+                'Sharp not available, returning original image buffer',
+            );
+        }
 
         console.log(
             `✅ Image optimized for page ${pageNumber}, final size: ${optimizedBuffer.length} bytes`,
@@ -324,17 +378,20 @@ async function convertPdfPageToImage(
         console.warn(`Creating text-based placeholder for page ${pageNumber}`);
 
         try {
-            const placeholderImage = await sharp({
-                create: {
-                    width: 1240,
-                    height: 1754,
-                    channels: 3,
-                    background: { r: 248, g: 249, b: 250 },
-                },
-            })
-                .composite([
-                    {
-                        input: Buffer.from(`
+            let placeholderImage: Buffer;
+            const _sharpPlaceholder = await getSharp();
+            if (_sharpPlaceholder) {
+                placeholderImage = await _sharpPlaceholder({
+                    create: {
+                        width: 1240,
+                        height: 1754,
+                        channels: 3,
+                        background: { r: 248, g: 249, b: 250 },
+                    },
+                })
+                    .composite([
+                        {
+                            input: Buffer.from(`
                     <svg width="1240" height="1754" xmlns="http://www.w3.org/2000/svg">
                         <rect width="1240" height="1754" fill="#f8f9fa" stroke="#e5e7eb" stroke-width="2"/>
                         <text x="620" y="800" text-anchor="middle" font-family="Arial" font-size="48" fill="#6b7280">
@@ -348,11 +405,16 @@ async function convertPdfPageToImage(
                         </text>
                     </svg>
                 `),
-                        gravity: 'center',
-                    },
-                ])
-                .jpeg({ quality: 80 })
-                .toBuffer();
+                            gravity: 'center',
+                        },
+                    ])
+                    .jpeg({ quality: 80 })
+                    .toBuffer();
+            } else {
+                // Fallback: create a simple placeholder buffer
+                placeholderImage = Buffer.from('PDF Page ' + pageNumber);
+                console.warn('Sharp not available, using minimal placeholder');
+            }
 
             console.log(
                 `✅ Created placeholder image for page ${pageNumber}, size: ${placeholderImage.length} bytes`,
