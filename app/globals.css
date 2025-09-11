@@ -1,0 +1,183 @@
+@import "tailwindcss";
+
+:root {
+  --background: #ffffff;
+  --foreground: #171717;
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: #0a0a0a;
+    --foreground: #ededed;
+  }
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: Arial, Helvetica, sans-serif;
+}
+
+/* Date input styling improvements */
+input[type="date"] {
+  position: relative;
+  background: white;
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: textfield;
+}
+
+input[type="date"]::-webkit-calendar-picker-indicator {
+  opacity: 0.6;
+  cursor: pointer;
+  margin-left: 4px;
+  filter: invert(0.5);
+}
+
+input[type="date"]::-webkit-calendar-picker-indicator:hover {
+  opacity: 1;
+  filter: invert(0.3);
+}
+
+input[type="date"]::-webkit-datetime-edit {
+  color: inherit;
+}
+
+input[type="date"]::-webkit-datetime-edit-text {
+  color: inherit;
+}
+
+input[type="date"]::-webkit-datetime-edit-month-field,
+input[type="date"]::-webkit-datetime-edit-day-field,
+input[type="date"]::-webkit-datetime-edit-year-field {
+  color: inherit;
+}
+
+/* Ensure date inputs have proper contrast when filled */
+input[type="date"]:valid {
+  color: #111827 !important;
+}
+
+input[type="date"]:focus {
+  color: #111827 !important;
+}
+
+/* Additional styling for better visibility */
+input[type="date"]:not(:placeholder-shown) {
+  color: #111827 !important;
+  font-weight: 500;
+}
+
+/* Firefox specific styles */
+input[type="date"]::-moz-focus-inner {
+  border: 0;
+  padding: 0;
+}
+
+/* Search input styling improvements */
+input[type="text"], input[type="search"] {
+  color: #111827;
+}
+
+input[type="text"]:focus, input[type="search"]:focus {
+  color: #111827 !important;
+}
+
+input[type="text"]::placeholder, input[type="search"]::placeholder {
+  color: #9ca3af;
+  opacity: 1;
+}
+
+/* Ensure all text inputs have proper contrast */
+input[type="text"]:not(:placeholder-shown), 
+input[type="search"]:not(:placeholder-shown) {
+  color: #111827 !important;
+  font-weight: 500;
+}
+
+/* Modal and JSON display improvements */
+pre, .font-mono {
+  color: #111827 !important;
+}
+
+/* Ensure good contrast for all text in modals */
+.modal-text {
+  color: #111827 !important;
+}
+
+/* Better visibility for JSON and code blocks */
+pre code, pre {
+  color: #1f2937 !important;
+  background-color: #f9fafb !important;
+}
+
+/* Responsive improvements */
+@media (max-width: 640px) {
+  /* Improve touch targets on mobile */
+  button, input, select, textarea {
+    min-height: 44px;
+  }
+
+  /* Better button spacing on mobile */
+  .space-x-2 > * + * {
+    margin-left: 0.25rem;
+  }
+
+  /* Ensure tables are scrollable on mobile */
+  .table-container {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  /* Improve modal sizing on mobile */
+  .modal-content {
+    margin: 0.5rem;
+    max-height: calc(100vh - 1rem);
+  }
+}
+
+/* Improve focus states for accessibility */
+input:focus, button:focus, select:focus, textarea:focus {
+  outline: 2px solid #3b82f6;
+  outline-offset: 2px;
+}
+
+/* Better contrast for disabled states */
+button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* Smooth transitions for interactive elements */
+button, input, select {
+  transition: all 0.2s ease-in-out;
+}
+
+/* Improve scrollbar styling */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #cbd5e1 #f1f5f9;
+}
+
+*::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+*::-webkit-scrollbar-track {
+  background: #f1f5f9;
+  border-radius: 3px;
+}
+
+*::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 3px;
+}
+
+*::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
