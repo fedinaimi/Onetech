@@ -70,7 +70,7 @@ const EditableField: React.FC<{
                 </>
             ) : (
                 <>
-                    <span className="flex-1">{value || '-'}</span>
+                    <span className="flex-1 text-gray-900">{value || '-'}</span>
                     <button
                         onClick={() => startEdit(docId, field, value)}
                         className="text-blue-600 hover:text-blue-800 p-1"
@@ -613,7 +613,7 @@ export const KosuTable: React.FC<TableRendererProps> = ({
                                 </h3>
                             </div>
                             <div className="px-6 py-4">
-                                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-gray-800">
                                     {objectFields.map(
                                         ({
                                             label,
