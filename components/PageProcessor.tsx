@@ -73,16 +73,14 @@ export default function PageProcessor({
             );
 
             try {
-                // Extract buffer from imageDataUrl
-                const base64Data = page.imageDataUrl.split(',')[1];
-
+                // Use imageDataUrl directly since it comes from backend split
                 const response = await fetch('/api/process-page', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
                     },
                     body: JSON.stringify({
-                        pageBuffer: base64Data,
+                        imageDataUrl: page.imageDataUrl, // Send the complete data URL
                         fileName: page.fileName,
                         mimeType: page.mimeType,
                         documentType,

@@ -563,8 +563,11 @@ export default function HomePage() {
     // per-request export remains handled by API; removed global export buttons from header
 
     const renderTableData = (doc: Document) => {
+        // Handle nested data structure - actual document data might be in doc.data.data
+        const documentData = doc.data?.data || doc.data;
+        
         const tableProps = {
-            doc,
+            doc: { ...doc, data: documentData }, // Pass the corrected data structure
             selectedType,
             editingCell,
             editValue,
@@ -575,11 +578,50 @@ export default function HomePage() {
             setSelectedDocument,
         };
 
-        if (selectedType === 'Rebut' && doc.data.items)
+        // Debug logging to understand data structure
+        console.log('Document data structure:', {
+            filename: doc.metadata?.filename,
+            originalDataKeys: doc.data ? Object.keys(doc.data) : 'No data object',
+            actualDataKeys: documentData ? Object.keys(documentData) : 'No document data',
+            documentData: documentData,
+            selectedType
+        });
+
+        // Check if document has data to display (any data beyond just document_type)
+        const hasData = documentData && (
+            // Check for any meaningful content
+            Object.keys(documentData).some(key => {
+                if (key === 'document_type') return false;
+                const value = documentData[key];
+                
+                // More comprehensive check for valid data
+                if (value === null || value === undefined || value === '') return false;
+                if (Array.isArray(value) && value.length === 0) return false;
+                if (typeof value === 'object' && Object.keys(value).length === 0) return false;
+                
+                return true;
+            })
+        );
+
+        console.log('Has data:', hasData);
+
+        if (!hasData) {
+            return (
+                <div className="p-4 text-gray-500">
+                    <div>No data available for preview</div>
+                    <div className="text-xs mt-2 text-gray-400">
+                        Debug: {documentData ? `Data keys: ${Object.keys(documentData).join(', ')}` : 'No data object found'}
+                    </div>
+                </div>
+            );
+        }
+
+        // Render the appropriate table based on document type
+        if (selectedType === 'Rebut')
             return <RebutTable {...tableProps} />;
-        if (selectedType === 'NPT' && doc.data.downtime_events)
+        if (selectedType === 'NPT')
             return <NPTTable {...tableProps} />;
-        if (selectedType === 'Kosu' && doc.data.team_summary)
+        if (selectedType === 'Kosu')
             return <KosuTable {...tableProps} />;
 
         return (

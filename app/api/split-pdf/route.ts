@@ -1,7 +1,8 @@
 'use server';
 
-import { splitFileIntoPages } from '@/lib/pdfUtils';
 import { NextRequest, NextResponse } from 'next/server';
+
+const BACKEND_URL = process.env.NEXT_PUBLIC_EXTRACT_API?.replace('/extract/', '') || 'http://127.0.0.1:8000';
 
 export async function POST(request: NextRequest) {
     console.log('=== PDF SPLIT API CALLED ===');
@@ -23,41 +24,52 @@ export async function POST(request: NextRequest) {
             type: file.type,
         });
 
-        // Split file into pages
-        const pages = await splitFileIntoPages(file);
-        console.log(`File split into ${pages.length} pages`);
+        console.log('Backend URL:', BACKEND_URL);
 
-        // Convert page buffers to base64 for frontend display
-        const pageData = pages.map(page => ({
-            pageNumber: page.pageNumber,
-            fileName: page.fileName,
-            mimeType: page.mimeType,
-            // Convert buffer to base64 for display in frontend
-            imageDataUrl: `data:${page.mimeType};base64,${page.buffer.toString('base64')}`,
-            // Store original buffer data temporarily (we'll need this for processing)
-            bufferSize: page.buffer.length,
-            // Add processing status tracking
-            status: 'pending' as const,
-            extractedData: null,
-            error: null,
-        }));
+        // Create FormData to send to backend
+        const backendFormData = new FormData();
+        backendFormData.append('file', file);
 
-        return NextResponse.json({
-            success: true,
-            originalFileName: file.name,
-            totalPages: pages.length,
-            pages: pageData,
+        console.log('Calling backend split-pdf endpoint...');
+
+        // Call the backend PDF split endpoint
+        const backendResponse = await fetch(`${BACKEND_URL}/split-pdf/`, {
+            method: 'POST',
+            body: backendFormData,
         });
+
+        console.log('Backend response status:', backendResponse.status);
+        
+        if (!backendResponse.ok) {
+            const errorText = await backendResponse.text();
+            console.error('Backend error response:', errorText);
+            
+            let errorData;
+            try {
+                errorData = JSON.parse(errorText);
+            } catch {
+                errorData = { error: errorText || 'Unknown backend error' };
+            }
+            
+            return NextResponse.json(
+                { error: errorData.error || 'Failed to process PDF' },
+                { status: backendResponse.status },
+            );
+        }
+
+        const result = await backendResponse.json();
+        console.log(`PDF split successfully: ${result.totalPages} pages`);
+
+        return NextResponse.json(result);
     } catch (error) {
         console.error('Error splitting PDF:', error);
 
         let errorMessage = 'Failed to split PDF';
         if (error instanceof Error) {
-            if (error.message.includes('Unsupported file type')) {
-                errorMessage =
-                    'Unsupported file type. Please upload a PDF, image, or supported document.';
-            } else if (error.message.includes('PDF conversion')) {
-                errorMessage = 'Failed to convert PDF pages to images.';
+            if (error.message.includes('fetch')) {
+                errorMessage = 'Failed to connect to backend service';
+            } else if (error.message.includes('PDF')) {
+                errorMessage = 'Failed to process PDF file';
             }
         }
 
