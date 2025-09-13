@@ -89,26 +89,39 @@ export async function POST(request: NextRequest) {
 
         if (imageDataUrl) {
             // Image came from backend PDF split (base64 data URL)
-            const base64Data = imageDataUrl.replace(/^data:image\/[a-z]+;base64,/, '');
+            const base64Data = imageDataUrl.replace(
+                /^data:image\/[a-z]+;base64,/,
+                '',
+            );
             buffer = Buffer.from(base64Data, 'base64');
             actualFileName = fileName || `page-${pageNumber}.jpg`;
             actualMimeType = mimeType || 'image/jpeg';
-            console.log(`Processing backend-split page ${pageNumber} from imageDataUrl`);
+            console.log(
+                `Processing backend-split page ${pageNumber} from imageDataUrl`,
+            );
         } else if (pageBuffer) {
             // Traditional base64 buffer
             buffer = Buffer.from(pageBuffer, 'base64');
             actualFileName = fileName;
             actualMimeType = mimeType;
-            console.log(`Processing traditional page ${pageNumber} from pageBuffer`);
+            console.log(
+                `Processing traditional page ${pageNumber} from pageBuffer`,
+            );
         } else {
             return NextResponse.json(
-                { error: 'Missing page image data (pageBuffer or imageDataUrl required)' },
+                {
+                    error: 'Missing page image data (pageBuffer or imageDataUrl required)',
+                },
                 { status: 400 },
             );
         }
 
         // Create File object for external API
-        const pageFile = createFileFromBuffer(buffer, actualFileName, actualMimeType);
+        const pageFile = createFileFromBuffer(
+            buffer,
+            actualFileName,
+            actualMimeType,
+        );
 
         console.log(`Processing page ${pageNumber} of ${originalFileName}`);
 

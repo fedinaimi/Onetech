@@ -2,7 +2,9 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 
-const BACKEND_URL = process.env.NEXT_PUBLIC_EXTRACT_API?.replace('/extract/', '') || 'http://127.0.0.1:8000';
+const BACKEND_URL =
+    process.env.NEXT_PUBLIC_EXTRACT_API?.replace('/extract/', '') ||
+    'http://127.0.0.1:8000';
 
 export async function POST(request: NextRequest) {
     console.log('=== PDF SPLIT API CALLED ===');
@@ -39,18 +41,18 @@ export async function POST(request: NextRequest) {
         });
 
         console.log('Backend response status:', backendResponse.status);
-        
+
         if (!backendResponse.ok) {
             const errorText = await backendResponse.text();
             console.error('Backend error response:', errorText);
-            
+
             let errorData;
             try {
                 errorData = JSON.parse(errorText);
             } catch {
                 errorData = { error: errorText || 'Unknown backend error' };
             }
-            
+
             return NextResponse.json(
                 { error: errorData.error || 'Failed to process PDF' },
                 { status: backendResponse.status },

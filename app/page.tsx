@@ -565,7 +565,7 @@ export default function HomePage() {
     const renderTableData = (doc: Document) => {
         // Handle nested data structure - actual document data might be in doc.data.data
         const documentData = doc.data?.data || doc.data;
-        
+
         const tableProps = {
             doc: { ...doc, data: documentData }, // Pass the corrected data structure
             selectedType,
@@ -581,27 +581,36 @@ export default function HomePage() {
         // Debug logging to understand data structure
         console.log('Document data structure:', {
             filename: doc.metadata?.filename,
-            originalDataKeys: doc.data ? Object.keys(doc.data) : 'No data object',
-            actualDataKeys: documentData ? Object.keys(documentData) : 'No document data',
+            originalDataKeys: doc.data
+                ? Object.keys(doc.data)
+                : 'No data object',
+            actualDataKeys: documentData
+                ? Object.keys(documentData)
+                : 'No document data',
             documentData: documentData,
-            selectedType
+            selectedType,
         });
 
         // Check if document has data to display (any data beyond just document_type)
-        const hasData = documentData && (
+        const hasData =
+            documentData &&
             // Check for any meaningful content
             Object.keys(documentData).some(key => {
                 if (key === 'document_type') return false;
                 const value = documentData[key];
-                
+
                 // More comprehensive check for valid data
-                if (value === null || value === undefined || value === '') return false;
+                if (value === null || value === undefined || value === '')
+                    return false;
                 if (Array.isArray(value) && value.length === 0) return false;
-                if (typeof value === 'object' && Object.keys(value).length === 0) return false;
-                
+                if (
+                    typeof value === 'object' &&
+                    Object.keys(value).length === 0
+                )
+                    return false;
+
                 return true;
-            })
-        );
+            });
 
         console.log('Has data:', hasData);
 
@@ -610,19 +619,19 @@ export default function HomePage() {
                 <div className="p-4 text-gray-500">
                     <div>No data available for preview</div>
                     <div className="text-xs mt-2 text-gray-400">
-                        Debug: {documentData ? `Data keys: ${Object.keys(documentData).join(', ')}` : 'No data object found'}
+                        Debug:{' '}
+                        {documentData
+                            ? `Data keys: ${Object.keys(documentData).join(', ')}`
+                            : 'No data object found'}
                     </div>
                 </div>
             );
         }
 
         // Render the appropriate table based on document type
-        if (selectedType === 'Rebut')
-            return <RebutTable {...tableProps} />;
-        if (selectedType === 'NPT')
-            return <NPTTable {...tableProps} />;
-        if (selectedType === 'Kosu')
-            return <KosuTable {...tableProps} />;
+        if (selectedType === 'Rebut') return <RebutTable {...tableProps} />;
+        if (selectedType === 'NPT') return <NPTTable {...tableProps} />;
+        if (selectedType === 'Kosu') return <KosuTable {...tableProps} />;
 
         return (
             <div className="p-4 text-gray-500">
