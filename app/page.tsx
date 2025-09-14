@@ -2,10 +2,11 @@
 
 import DocumentList from '@/components/DocumentList';
 import HeaderBar from '@/components/HeaderBar';
+import ImageProcessor from '@/components/ImageProcessor';
 import PageProcessor from '@/components/PageProcessor';
 import { KosuTable, NPTTable, RebutTable } from '@/components/TableRenderers';
 import axios from 'axios';
-import { Clock, FileText, Plus, Upload, Users, X } from 'lucide-react';
+import { Clock, FileText, Loader2, Plus, Upload, Users, X } from 'lucide-react';
 import React, { useCallback, useRef, useState } from 'react';
 
 type DocumentType = 'Rebut' | 'NPT' | 'Kosu';
@@ -19,6 +20,17 @@ interface PageData {
     status: 'pending' | 'processing' | 'completed' | 'error';
     extractedData: any;
     error: string | null;
+}
+
+interface ImageData {
+    fileName: string;
+    mimeType: string;
+    imageDataUrl: string;
+    fileSize: number;
+    status: 'pending' | 'processing' | 'completed' | 'error';
+    extractedData: any;
+    error: string | null;
+    retryCount?: number;
 }
 
 interface UploadingFile {
@@ -85,6 +97,11 @@ export default function HomePage() {
     const [renameValue, setRenameValue] = useState('');
     const [processingPages, setProcessingPages] = useState<PageData[]>([]);
     const [isProcessingPDF, setIsProcessingPDF] = useState(false);
+    const [processingImage, setProcessingImage] = useState<ImageData | null>(
+        null,
+    );
+    const [isProcessingImage, setIsProcessingImage] = useState(false);
+    const [isUploading, setIsUploading] = useState(false);
     const fileInputRef = useRef<HTMLInputElement>(null);
 
     // Load persisted processing state on mount
@@ -133,6 +150,68 @@ export default function HomePage() {
                 localStorage.setItem('processing-state', JSON.stringify(state));
             } catch (error) {
                 console.error('Error saving processing state:', error);
+            }
+        },
+        [selectedType],
+    );
+
+    // Load persisted image processing state on mount
+    const loadPersistedImageProcessingState = useCallback(() => {
+        try {
+            const savedState = localStorage.getItem('image-processing-state');
+            if (savedState) {
+                const {
+                    imageData,
+                    isProcessing,
+                    documentType: savedType,
+                } = JSON.parse(savedState);
+
+                // Only restore if processing was incomplete and matches current document type
+                if (
+                    imageData &&
+                    imageData.status !== 'completed' &&
+                    savedType === selectedType
+                ) {
+                    console.log(
+                        'Restoring image processing state:',
+                        imageData.fileName,
+                    );
+                    setProcessingImage(imageData);
+                    setIsProcessingImage(isProcessing);
+                } else {
+                    // Clear completed or mismatched processing state
+                    localStorage.removeItem('image-processing-state');
+                }
+            }
+        } catch (error) {
+            console.error(
+                'Error loading persisted image processing state:',
+                error,
+            );
+            localStorage.removeItem('image-processing-state');
+        }
+    }, [selectedType]);
+
+    // Save image processing state to localStorage
+    const saveImageProcessingState = useCallback(
+        (imageData: ImageData | null, isProcessing: boolean) => {
+            try {
+                if (imageData) {
+                    const state = {
+                        imageData,
+                        isProcessing,
+                        documentType: selectedType,
+                        timestamp: Date.now(),
+                    };
+                    localStorage.setItem(
+                        'image-processing-state',
+                        JSON.stringify(state),
+                    );
+                } else {
+                    localStorage.removeItem('image-processing-state');
+                }
+            } catch (error) {
+                console.error('Error saving image processing state:', error);
             }
         },
         [selectedType],
@@ -193,7 +272,13 @@ export default function HomePage() {
         loadDocuments();
         loadDocumentCounts(); // Load all counts
         loadPersistedProcessingState(); // Load any persisted processing state
-    }, [loadDocuments, loadDocumentCounts, loadPersistedProcessingState]);
+        loadPersistedImageProcessingState(); // Load any persisted image processing state
+    }, [
+        loadDocuments,
+        loadDocumentCounts,
+        loadPersistedProcessingState,
+        loadPersistedImageProcessingState,
+    ]);
 
     // Save processing state when user is about to leave/refresh
     React.useEffect(() => {
@@ -208,12 +293,122 @@ export default function HomePage() {
                     originalFileName,
                 );
             }
+
+            if (processingImage && isProcessingImage) {
+                saveImageProcessingState(processingImage, isProcessingImage);
+            }
         };
 
         window.addEventListener('beforeunload', handleBeforeUnload);
         return () =>
             window.removeEventListener('beforeunload', handleBeforeUnload);
-    }, [processingPages, isProcessingPDF, saveProcessingState]);
+    }, [
+        processingPages,
+        isProcessingPDF,
+        saveProcessingState,
+        processingImage,
+        isProcessingImage,
+        saveImageProcessingState,
+    ]);
+
+    // Save image processing state when it changes
+    React.useEffect(() => {
+        if (processingImage && isProcessingImage) {
+            saveImageProcessingState(processingImage, isProcessingImage);
+        }
+    }, [processingImage, isProcessingImage, saveImageProcessingState]);
+
+    const handleImageUpload = useCallback(
+        async (file: File) => {
+            setIsProcessingImage(true);
+            setProcessingImage(null);
+
+            try {
+                // Create image data URL for visualization
+                const reader = new FileReader();
+                reader.onload = e => {
+                    const imageDataUrl = e.target?.result as string;
+
+                    const imageData: ImageData = {
+                        fileName: file.name,
+                        mimeType: file.type,
+                        imageDataUrl,
+                        fileSize: file.size,
+                        status: 'pending',
+                        extractedData: null,
+                        error: null,
+                    };
+
+                    setProcessingImage(imageData);
+                    // Save initial processing state to localStorage
+                    saveImageProcessingState(imageData, true);
+                };
+                reader.readAsDataURL(file);
+            } catch (error) {
+                console.error('Error preparing image for processing:', error);
+                setIsProcessingImage(false);
+            }
+        },
+        [saveImageProcessingState],
+    );
+
+    const handleImageProcessComplete = useCallback(
+        async (data: any) => {
+            try {
+                // Save the extracted data to the database
+                const response = await fetch('/api/documents', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        data,
+                        metadata: {
+                            filename: processingImage?.fileName || 'unknown',
+                            document_type: selectedType,
+                            processed_at: new Date().toISOString(),
+                            file_size: processingImage?.fileSize || 0,
+                        },
+                        remark: '',
+                    }),
+                });
+
+                if (response.ok) {
+                    console.log(
+                        'Image processing completed and saved to database',
+                    );
+                    await loadDocuments();
+                    await loadDocumentCounts();
+
+                    // Clear processing state and localStorage after a delay
+                    setTimeout(() => {
+                        setIsProcessingImage(false);
+                        setProcessingImage(null);
+                        saveImageProcessingState(null, false);
+                    }, 2000);
+                } else {
+                    throw new Error('Failed to save processed image data');
+                }
+            } catch (error) {
+                console.error('Error saving processed image data:', error);
+                handleImageProcessError('Failed to save processed data');
+            }
+        },
+        [processingImage, selectedType, loadDocuments, loadDocumentCounts],
+    );
+
+    const handleImageProcessError = useCallback(
+        (error: string) => {
+            console.error('Image processing error:', error);
+            // Keep the error state visible for a few seconds, then clear
+            setTimeout(() => {
+                setIsProcessingImage(false);
+                setProcessingImage(null);
+                saveImageProcessingState(null, false);
+            }, 5000);
+        },
+        [saveImageProcessingState],
+    );
 
     const handleRegularFileUpload = useCallback(
         async (file: File) => {
@@ -379,20 +574,31 @@ export default function HomePage() {
                 file.type === 'application/pdf' ||
                 file.name.toLowerCase().endsWith('.pdf');
 
+            // Check if it's an image file to use visualization
+            const isImage = file.type.startsWith('image/');
+
             if (isPDF) {
                 await handlePDFUpload(file);
+            } else if (isImage) {
+                await handleImageUpload(file);
             } else {
                 await handleRegularFileUpload(file);
             }
         },
-        [handlePDFUpload, handleRegularFileUpload],
+        [handlePDFUpload, handleImageUpload, handleRegularFileUpload],
     );
 
     const handleMultipleFilesUpload = useCallback(
         (files: File[]) => {
-            files.forEach(file => {
-                handleSingleFileUpload(file);
-            });
+            setIsUploading(true);
+
+            // Small delay to show the preparing state before processing begins
+            setTimeout(() => {
+                files.forEach(file => {
+                    handleSingleFileUpload(file);
+                });
+                setIsUploading(false);
+            }, 500);
         },
         [handleSingleFileUpload],
     );
@@ -730,19 +936,56 @@ export default function HomePage() {
                         <div className="flex sm:ml-auto">
                             <button
                                 onClick={() => fileInputRef.current?.click()}
-                                disabled={uploadingFiles.some(
-                                    f => f.status === 'uploading',
-                                )}
+                                disabled={
+                                    uploadingFiles.some(
+                                        f => f.status === 'uploading',
+                                    ) ||
+                                    isProcessingPDF ||
+                                    isProcessingImage ||
+                                    isUploading
+                                }
                                 className="bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white px-3 sm:px-4 py-2 sm:py-3 rounded-lg 
                                 font-medium text-sm sm:text-base transition-all duration-200 hover:scale-[1.02] active:scale-95 
                                 flex items-center gap-2 min-h-[44px] w-full sm:w-auto justify-center shadow-lg hover:shadow-xl"
                             >
-                                <Plus className="h-4 w-4 sm:h-5 sm:w-5 flex-shrink-0" />
-                                <span className="hidden sm:inline">
-                                    Upload {selectedType} Documents
-                                </span>
-                                <span className="sm:hidden">Upload</span>
-                                <Upload className="h-4 w-4 sm:h-5 sm:w-5 flex-shrink-0" />
+                                {uploadingFiles.some(
+                                    f => f.status === 'uploading',
+                                ) ||
+                                isProcessingPDF ||
+                                isProcessingImage ||
+                                isUploading ? (
+                                    <>
+                                        <Loader2 className="h-4 w-4 sm:h-5 sm:w-5 flex-shrink-0 animate-spin" />
+                                        <span className="hidden sm:inline">
+                                            {isProcessingPDF
+                                                ? 'Processing PDF...'
+                                                : isProcessingImage
+                                                  ? 'Processing Image...'
+                                                  : isUploading
+                                                    ? 'Preparing files...'
+                                                    : 'Uploading...'}
+                                        </span>
+                                        <span className="sm:hidden">
+                                            {isProcessingPDF ||
+                                            isProcessingImage
+                                                ? 'Processing...'
+                                                : isUploading
+                                                  ? 'Preparing...'
+                                                  : 'Uploading...'}
+                                        </span>
+                                    </>
+                                ) : (
+                                    <>
+                                        <Plus className="h-4 w-4 sm:h-5 sm:w-5 flex-shrink-0" />
+                                        <span className="hidden sm:inline">
+                                            Upload {selectedType} Documents
+                                        </span>
+                                        <span className="sm:hidden">
+                                            Upload
+                                        </span>
+                                        <Upload className="h-4 w-4 sm:h-5 sm:w-5 flex-shrink-0" />
+                                    </>
+                                )}
                             </button>
                             <input
                                 ref={fileInputRef}
@@ -915,6 +1158,17 @@ export default function HomePage() {
                         }
                         onPageComplete={handlePageComplete}
                         onAllComplete={handleAllComplete}
+                    />
+                )}
+
+                {/* Image Processing Component */}
+                {isProcessingImage && processingImage && (
+                    <ImageProcessor
+                        imageData={processingImage}
+                        documentType={selectedType}
+                        originalFileName={processingImage.fileName}
+                        onComplete={handleImageProcessComplete}
+                        onError={handleImageProcessError}
                     />
                 )}
 
