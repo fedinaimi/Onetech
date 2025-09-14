@@ -84,6 +84,7 @@ export default function ImageProcessor({
                         error: null,
                     }));
 
+                    // Pass the complete document data instead of just extractedData
                     onComplete(result.extractedData);
                 } else {
                     console.log('Image processing failed:', result.error);

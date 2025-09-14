@@ -355,46 +355,30 @@ export default function HomePage() {
     const handleImageProcessComplete = useCallback(
         async (data: any) => {
             try {
-                // Save the extracted data to the database
-                const response = await fetch('/api/documents', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({
-                        data,
-                        metadata: {
-                            filename: processingImage?.fileName || 'unknown',
-                            document_type: selectedType,
-                            processed_at: new Date().toISOString(),
-                            file_size: processingImage?.fileSize || 0,
-                        },
-                        remark: '',
-                    }),
-                });
+                // The document is already saved by the process-page API
+                // Just refresh the document list and update counts
+                console.log('Image processing completed, refreshing document list');
+                
+                await loadDocuments();
+                await loadDocumentCounts();
 
-                if (response.ok) {
-                    console.log(
-                        'Image processing completed and saved to database',
-                    );
-                    await loadDocuments();
-                    await loadDocumentCounts();
-
-                    // Clear processing state and localStorage after a delay
-                    setTimeout(() => {
-                        setIsProcessingImage(false);
-                        setProcessingImage(null);
-                        saveImageProcessingState(null, false);
-                    }, 2000);
-                } else {
-                    throw new Error('Failed to save processed image data');
-                }
+                // Clear processing state and localStorage after a delay
+                setTimeout(() => {
+                    setIsProcessingImage(false);
+                    setProcessingImage(null);
+                    saveImageProcessingState(null, false);
+                }, 2000);
             } catch (error) {
-                console.error('Error saving processed image data:', error);
-                handleImageProcessError('Failed to save processed data');
+                console.error('Error refreshing documents after image processing:', error);
+                // Handle error by clearing the processing state
+                setTimeout(() => {
+                    setIsProcessingImage(false);
+                    setProcessingImage(null);
+                    saveImageProcessingState(null, false);
+                }, 5000);
             }
         },
-        [processingImage, selectedType, loadDocuments, loadDocumentCounts],
+        [loadDocuments, loadDocumentCounts, saveImageProcessingState],
     );
 
     const handleImageProcessError = useCallback(
