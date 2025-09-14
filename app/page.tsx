@@ -352,34 +352,34 @@ export default function HomePage() {
         [saveImageProcessingState],
     );
 
-    const handleImageProcessComplete = useCallback(
-        async (data: any) => {
-            try {
-                // The document is already saved by the process-page API
-                // Just refresh the document list and update counts
-                console.log('Image processing completed, refreshing document list');
-                
-                await loadDocuments();
-                await loadDocumentCounts();
+    const handleImageProcessComplete = useCallback(async () => {
+        try {
+            // The document is already saved by the process-page API
+            // Just refresh the document list and update counts
+            console.log('Image processing completed, refreshing document list');
 
-                // Clear processing state and localStorage after a delay
-                setTimeout(() => {
-                    setIsProcessingImage(false);
-                    setProcessingImage(null);
-                    saveImageProcessingState(null, false);
-                }, 2000);
-            } catch (error) {
-                console.error('Error refreshing documents after image processing:', error);
-                // Handle error by clearing the processing state
-                setTimeout(() => {
-                    setIsProcessingImage(false);
-                    setProcessingImage(null);
-                    saveImageProcessingState(null, false);
-                }, 5000);
-            }
-        },
-        [loadDocuments, loadDocumentCounts, saveImageProcessingState],
-    );
+            await loadDocuments();
+            await loadDocumentCounts();
+
+            // Clear processing state and localStorage after a delay
+            setTimeout(() => {
+                setIsProcessingImage(false);
+                setProcessingImage(null);
+                saveImageProcessingState(null, false);
+            }, 2000);
+        } catch (error) {
+            console.error(
+                'Error refreshing documents after image processing:',
+                error,
+            );
+            // Handle error by clearing the processing state
+            setTimeout(() => {
+                setIsProcessingImage(false);
+                setProcessingImage(null);
+                saveImageProcessingState(null, false);
+            }, 5000);
+        }
+    }, [loadDocuments, loadDocumentCounts, saveImageProcessingState]);
 
     const handleImageProcessError = useCallback(
         (error: string) => {
