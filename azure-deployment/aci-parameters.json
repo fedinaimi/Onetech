@@ -1,0 +1,30 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "containerGroupName": {
+      "value": "onetech-frontend"
+    },
+    "containerImageName": {
+      "value": "onetechregistry.azurecr.io/onetech-frontend:latest"
+    },
+    "registryServer": {
+      "value": "onetechregistry.azurecr.io"
+    },
+    "registryUsername": {
+      "value": "onetechregistry"
+    },
+    "registryPassword": {
+      "value": "YOUR_REGISTRY_PASSWORD"
+    },
+    "backendApiUrl": {
+      "value": "http://onetech-backend-uniquestring.region.azurecontainer.io:8000"
+    },
+    "mongodbUri": {
+      "value": "YOUR_MONGODB_CONNECTION_STRING"
+    },
+    "nextAuthSecret": {
+      "value": "YOUR_NEXTAUTH_SECRET"
+    }
+  }
+}

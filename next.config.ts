@@ -7,6 +7,8 @@ const nextConfig: NextConfig = {
         loader: 'custom',
         loaderFile: './lib/imageLoader.js',
     },
+    // Enable standalone output for Docker deployment
+    output: 'standalone',
 };
 
 export default nextConfig;
