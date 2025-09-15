@@ -1,5 +1,5 @@
-# Use Node.js 18 Alpine as base image
-FROM node:18-alpine AS base
+# Use Node.js 20 Alpine as base image
+FROM node:20-alpine AS base
 
 # Install dependencies only when needed
 FROM base AS deps
@@ -9,6 +9,12 @@ WORKDIR /app
 
 # Install dependencies based on the preferred package manager
 COPY package.json package-lock.json* ./
+
+# Configure npm to reduce warnings
+RUN npm config set fund false && \
+    npm config set audit-level moderate
+
+# Install dependencies
 RUN npm ci
 
 # Rebuild the source code only when needed
@@ -16,6 +22,16 @@ FROM base AS builder
 WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
+
+# Accept build arguments
+ARG MONGODB_URI
+ARG NEXT_PUBLIC_API_URL
+ARG NEXT_PUBLIC_EXTRACT_API
+
+# Set environment variables for build
+ENV MONGODB_URI=$MONGODB_URI
+ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
+ENV NEXT_PUBLIC_EXTRACT_API=$NEXT_PUBLIC_EXTRACT_API
 
 # Next.js collects completely anonymous telemetry data about general usage.
 # Learn more here: https://nextjs.org/telemetry
