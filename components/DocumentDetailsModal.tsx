@@ -35,7 +35,7 @@ export const DocumentDetailsModal: React.FC<DocumentDetailsModalProps> = ({
 
     const downloadImage = async () => {
         if (!document.imageUrl) return;
-        
+
         try {
             const response = await fetch(document.imageUrl);
             const blob = await response.blob();
@@ -54,7 +54,7 @@ export const DocumentDetailsModal: React.FC<DocumentDetailsModalProps> = ({
 
     const renderDataTable = () => {
         const documentType = document.metadata.document_type;
-        
+
         // Common props for read-only tables
         const tableProps = {
             doc: document.data,
@@ -65,7 +65,7 @@ export const DocumentDetailsModal: React.FC<DocumentDetailsModalProps> = ({
             setEditingCell: () => {},
             startEdit: () => {},
             saveEdit: () => {},
-            setSelectedDocument: () => {}
+            setSelectedDocument: () => {},
         };
 
         switch (documentType) {
@@ -78,7 +78,10 @@ export const DocumentDetailsModal: React.FC<DocumentDetailsModalProps> = ({
             default:
                 return (
                     <div className="p-4 text-gray-500">
-                        <p>Data table view not available for this document type.</p>
+                        <p>
+                            Data table view not available for this document
+                            type.
+                        </p>
                         <pre className="mt-2 bg-gray-100 p-3 rounded text-xs overflow-auto">
                             {JSON.stringify(document.data, null, 2)}
                         </pre>
@@ -95,9 +98,12 @@ export const DocumentDetailsModal: React.FC<DocumentDetailsModalProps> = ({
                     {/* Modal Header */}
                     <div className="bg-blue-600 text-white p-4 flex justify-between items-center">
                         <div>
-                            <h2 className="text-xl font-bold">Document Details</h2>
+                            <h2 className="text-xl font-bold">
+                                Document Details
+                            </h2>
                             <p className="text-blue-100 text-sm">
-                                {document.metadata.filename} | {document.metadata.document_type}
+                                {document.metadata.filename} |{' '}
+                                {document.metadata.document_type}
                             </p>
                         </div>
                         <button
@@ -171,14 +177,19 @@ export const DocumentDetailsModal: React.FC<DocumentDetailsModalProps> = ({
                         )}
 
                         {/* Right Side - Data Section */}
-                        <div className={`${document.imageUrl ? 'w-1/2' : 'w-full'} flex flex-col`}>
+                        <div
+                            className={`${document.imageUrl ? 'w-1/2' : 'w-full'} flex flex-col`}
+                        >
                             {/* Data Header */}
                             <div className="bg-gray-50 p-3 border-b border-gray-200 flex justify-between items-center">
                                 <h3 className="text-sm font-medium text-gray-700">
                                     Extracted Data
                                 </h3>
                                 <div className="text-xs text-gray-600 bg-white px-2 py-1 rounded border">
-                                    Extracted: {new Date(document.metadata.processed_at).toLocaleDateString()}
+                                    Extracted:{' '}
+                                    {new Date(
+                                        document.metadata.processed_at,
+                                    ).toLocaleDateString()}
                                 </div>
                             </div>
 
@@ -192,27 +203,44 @@ export const DocumentDetailsModal: React.FC<DocumentDetailsModalProps> = ({
                                         </h4>
                                         <div className="grid grid-cols-2 gap-3 text-sm">
                                             <div>
-                                                <span className="text-gray-600">Type:</span>
+                                                <span className="text-gray-600">
+                                                    Type:
+                                                </span>
                                                 <span className="ml-2 font-medium">
-                                                    {document.metadata.document_type}
+                                                    {
+                                                        document.metadata
+                                                            .document_type
+                                                    }
                                                 </span>
                                             </div>
                                             <div>
-                                                <span className="text-gray-600">Filename:</span>
+                                                <span className="text-gray-600">
+                                                    Filename:
+                                                </span>
                                                 <span className="ml-2 font-medium">
                                                     {document.metadata.filename}
                                                 </span>
                                             </div>
                                             <div>
-                                                <span className="text-gray-600">Processed:</span>
+                                                <span className="text-gray-600">
+                                                    Processed:
+                                                </span>
                                                 <span className="ml-2 font-medium">
-                                                    {new Date(document.metadata.processed_at).toLocaleString()}
+                                                    {new Date(
+                                                        document.metadata.processed_at,
+                                                    ).toLocaleString()}
                                                 </span>
                                             </div>
                                             <div>
-                                                <span className="text-gray-600">File Size:</span>
+                                                <span className="text-gray-600">
+                                                    File Size:
+                                                </span>
                                                 <span className="ml-2 font-medium">
-                                                    {(document.metadata.file_size / 1024).toFixed(1)} KB
+                                                    {(
+                                                        document.metadata
+                                                            .file_size / 1024
+                                                    ).toFixed(1)}{' '}
+                                                    KB
                                                 </span>
                                             </div>
                                         </div>
@@ -225,7 +253,8 @@ export const DocumentDetailsModal: React.FC<DocumentDetailsModalProps> = ({
                                                 Extracted Data
                                             </h4>
                                             <div className="text-xs text-gray-500 bg-blue-50 px-2 py-1 rounded">
-                                                Compare with original document (left side)
+                                                Compare with original document
+                                                (left side)
                                             </div>
                                         </div>
                                         <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
@@ -234,16 +263,17 @@ export const DocumentDetailsModal: React.FC<DocumentDetailsModalProps> = ({
                                     </div>
 
                                     {/* Remark */}
-                                    {document.remark && document.remark !== 'no-remark' && (
-                                        <div className="bg-blue-50 rounded-lg p-4">
-                                            <h4 className="font-semibold text-blue-800 mb-2">
-                                                Processing Notes
-                                            </h4>
-                                            <p className="text-blue-700 text-sm">
-                                                {document.remark}
-                                            </p>
-                                        </div>
-                                    )}
+                                    {document.remark &&
+                                        document.remark !== 'no-remark' && (
+                                            <div className="bg-blue-50 rounded-lg p-4">
+                                                <h4 className="font-semibold text-blue-800 mb-2">
+                                                    Processing Notes
+                                                </h4>
+                                                <p className="text-blue-700 text-sm">
+                                                    {document.remark}
+                                                </p>
+                                            </div>
+                                        )}
                                 </div>
                             </div>
                         </div>

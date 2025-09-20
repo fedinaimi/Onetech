@@ -6,7 +6,18 @@ import ImageProcessor from '@/components/ImageProcessor';
 import PageProcessor from '@/components/PageProcessor';
 import { KosuTable, NPTTable, RebutTable } from '@/components/TableRenderers';
 import axios from 'axios';
-import { Clock, FileText, Loader2, Plus, RotateCcw, Upload, Users, X, ZoomIn, ZoomOut } from 'lucide-react';
+import {
+    Clock,
+    FileText,
+    Loader2,
+    Plus,
+    RotateCcw,
+    Upload,
+    Users,
+    X,
+    ZoomIn,
+    ZoomOut,
+} from 'lucide-react';
 import React, { useCallback, useRef, useState } from 'react';
 
 type DocumentType = 'Rebut' | 'NPT' | 'Kosu';
@@ -670,16 +681,18 @@ export default function HomePage() {
             if (response.status >= 200 && response.status < 300) {
                 // Update the documents list
                 await loadDocuments();
-                
+
                 // If the edited document is currently selected in the modal, update it immediately
                 if (selectedDocument && selectedDocument.id === docId) {
                     // Create a deep copy of the selected document to avoid mutation
-                    const updatedDocument = JSON.parse(JSON.stringify(selectedDocument));
-                    
+                    const updatedDocument = JSON.parse(
+                        JSON.stringify(selectedDocument),
+                    );
+
                     // Update the field in the document copy
                     const fieldPath = field.split('.');
                     let current = updatedDocument;
-                    
+
                     // Navigate to the parent of the field to be updated
                     for (let i = 0; i < fieldPath.length - 1; i++) {
                         if (current[fieldPath[i]] === undefined) {
@@ -687,14 +700,14 @@ export default function HomePage() {
                         }
                         current = current[fieldPath[i]];
                     }
-                    
+
                     // Update the final field
                     current[fieldPath[fieldPath.length - 1]] = newValue;
-                    
+
                     // Update the updated_at timestamp
                     updatedDocument.updated_at = new Date().toISOString();
                     updatedDocument.updated_by_user = true;
-                    
+
                     // Add to history if it doesn't exist
                     if (!updatedDocument.history) {
                         updatedDocument.history = [];
@@ -704,13 +717,13 @@ export default function HomePage() {
                         old_value: oldValue,
                         new_value: newValue,
                         updated_at: new Date().toISOString(),
-                        updated_by: 'user'
+                        updated_by: 'user',
                     });
-                    
+
                     // Update the selected document state
                     setSelectedDocument(updatedDocument);
                 }
-                
+
                 setEditingCell(null);
             }
         } catch (error) {
@@ -823,11 +836,12 @@ export default function HomePage() {
 
     // Drag handlers for panning
     const handleMouseDown = (e: React.MouseEvent) => {
-        if (imageZoom > 1) { // Only allow dragging when zoomed in
+        if (imageZoom > 1) {
+            // Only allow dragging when zoomed in
             setIsDragging(true);
             setDragStart({
                 x: e.clientX - imagePosition.x,
-                y: e.clientY - imagePosition.y
+                y: e.clientY - imagePosition.y,
             });
         }
     };
@@ -836,7 +850,7 @@ export default function HomePage() {
         if (isDragging && imageZoom > 1) {
             setImagePosition({
                 x: e.clientX - dragStart.x,
-                y: e.clientY - dragStart.y
+                y: e.clientY - dragStart.y,
             });
         }
     };
@@ -1374,7 +1388,9 @@ export default function HomePage() {
                                                         >
                                                             <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start mb-2 space-y-1 sm:space-y-0">
                                                                 <span className="font-medium text-gray-900 text-sm sm:text-base">
-                                                                    {entry.field}
+                                                                    {
+                                                                        entry.field
+                                                                    }
                                                                 </span>
                                                                 <span className="text-xs text-gray-600 font-medium">
                                                                     {new Date(
@@ -1385,7 +1401,8 @@ export default function HomePage() {
                                                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 text-sm">
                                                                 <div>
                                                                     <div className="text-gray-600 mb-1 text-xs sm:text-sm font-medium">
-                                                                        Old Value:
+                                                                        Old
+                                                                        Value:
                                                                     </div>
                                                                     <div className="bg-red-50 border border-red-200 rounded p-2 text-xs break-all text-gray-800 font-mono">
                                                                         {JSON.stringify(
@@ -1395,7 +1412,8 @@ export default function HomePage() {
                                                                 </div>
                                                                 <div>
                                                                     <div className="text-gray-600 mb-1 text-xs sm:text-sm font-medium">
-                                                                        New Value:
+                                                                        New
+                                                                        Value:
                                                                     </div>
                                                                     <div className="bg-green-50 border border-green-200 rounded p-2 text-xs break-all text-gray-800 font-mono">
                                                                         {JSON.stringify(
@@ -1430,7 +1448,10 @@ export default function HomePage() {
                                                     <ZoomOut size={16} />
                                                 </button>
                                                 <span className="text-sm font-medium text-gray-600 min-w-[50px] text-center">
-                                                    {Math.round(imageZoom * 100)}%
+                                                    {Math.round(
+                                                        imageZoom * 100,
+                                                    )}
+                                                    %
                                                 </span>
                                                 <button
                                                     onClick={handleZoomIn}
@@ -1455,14 +1476,23 @@ export default function HomePage() {
                                             </div>
                                         )}
                                     </div>
-                                    <div 
+                                    <div
                                         className="bg-white rounded-lg border-2 border-dashed border-gray-300 p-4 h-full min-h-[300px] flex items-center justify-center overflow-hidden"
-                                        onWheel={selectedDocument.imageUrl ? handleImageWheel : undefined}
+                                        onWheel={
+                                            selectedDocument.imageUrl
+                                                ? handleImageWheel
+                                                : undefined
+                                        }
                                         onMouseMove={handleMouseMove}
                                         onMouseUp={handleMouseUp}
                                         onMouseLeave={handleMouseLeave}
-                                        style={{ 
-                                            cursor: imageZoom > 1 ? (isDragging ? 'grabbing' : 'grab') : 'default'
+                                        style={{
+                                            cursor:
+                                                imageZoom > 1
+                                                    ? isDragging
+                                                        ? 'grabbing'
+                                                        : 'grab'
+                                                    : 'default',
                                         }}
                                     >
                                         {selectedDocument.imageUrl ? (
@@ -1474,44 +1504,80 @@ export default function HomePage() {
                                                         className="object-contain rounded-lg shadow-lg transition-transform duration-200 ease-out select-none"
                                                         style={{
                                                             transform: `scale(${imageZoom}) translate(${imagePosition.x / imageZoom}px, ${imagePosition.y / imageZoom}px)`,
-                                                            maxWidth: imageZoom > 1 ? 'none' : '100%',
-                                                            maxHeight: imageZoom > 1 ? 'none' : '100%',
+                                                            maxWidth:
+                                                                imageZoom > 1
+                                                                    ? 'none'
+                                                                    : '100%',
+                                                            maxHeight:
+                                                                imageZoom > 1
+                                                                    ? 'none'
+                                                                    : '100%',
                                                         }}
-                                                        onMouseDown={handleMouseDown}
-                                                        onDragStart={(e) => e.preventDefault()} // Prevent browser's default drag
-                                                        onError={(e) => {
-                                                            const img = e.currentTarget;
-                                                            const fallback = img.nextElementSibling as HTMLElement;
-                                                            img.style.display = 'none';
+                                                        onMouseDown={
+                                                            handleMouseDown
+                                                        }
+                                                        onDragStart={e =>
+                                                            e.preventDefault()
+                                                        } // Prevent browser's default drag
+                                                        onError={e => {
+                                                            const img =
+                                                                e.currentTarget;
+                                                            const fallback =
+                                                                img.nextElementSibling as HTMLElement;
+                                                            img.style.display =
+                                                                'none';
                                                             if (fallback) {
-                                                                fallback.style.display = 'flex';
+                                                                fallback.style.display =
+                                                                    'flex';
                                                             }
                                                         }}
                                                     />
                                                     <div className="hidden flex-col items-center justify-center text-gray-500 space-y-2">
-                                                        <div className="text-6xl">📄</div>
+                                                        <div className="text-6xl">
+                                                            📄
+                                                        </div>
                                                         <div className="text-sm text-center">
-                                                            <div>Image could not be loaded</div>
+                                                            <div>
+                                                                Image could not
+                                                                be loaded
+                                                            </div>
                                                             <div className="text-xs text-gray-400 mt-1 break-all">
-                                                                {selectedDocument.imageUrl}
+                                                                {
+                                                                    selectedDocument.imageUrl
+                                                                }
                                                             </div>
                                                         </div>
                                                     </div>
                                                 </div>
                                                 <div className="mt-3 text-xs text-gray-600 text-center">
-                                                    <div className="font-medium">{selectedDocument.metadata.filename}</div>
+                                                    <div className="font-medium">
+                                                        {
+                                                            selectedDocument
+                                                                .metadata
+                                                                .filename
+                                                        }
+                                                    </div>
                                                     <div className="text-gray-400 mt-1">
-                                                        Processed: {new Date(selectedDocument.metadata.processed_at).toLocaleString()}
+                                                        Processed:{' '}
+                                                        {new Date(
+                                                            selectedDocument.metadata.processed_at,
+                                                        ).toLocaleString()}
                                                     </div>
                                                 </div>
                                             </div>
                                         ) : (
                                             <div className="flex flex-col items-center justify-center text-gray-500 space-y-3">
-                                                <div className="text-6xl">📄</div>
+                                                <div className="text-6xl">
+                                                    📄
+                                                </div>
                                                 <div className="text-sm text-center">
-                                                    <div className="font-medium">No source image available</div>
+                                                    <div className="font-medium">
+                                                        No source image
+                                                        available
+                                                    </div>
                                                     <div className="text-xs text-gray-400 mt-1">
-                                                        The original document image was not saved
+                                                        The original document
+                                                        image was not saved
                                                     </div>
                                                 </div>
                                             </div>
