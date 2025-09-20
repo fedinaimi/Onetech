@@ -6,7 +6,7 @@ import ImageProcessor from '@/components/ImageProcessor';
 import PageProcessor from '@/components/PageProcessor';
 import { KosuTable, NPTTable, RebutTable } from '@/components/TableRenderers';
 import axios from 'axios';
-import { Clock, FileText, Loader2, Plus, Upload, Users, X } from 'lucide-react';
+import { Clock, FileText, Loader2, Plus, RotateCcw, Upload, Users, X, ZoomIn, ZoomOut } from 'lucide-react';
 import React, { useCallback, useRef, useState } from 'react';
 
 type DocumentType = 'Rebut' | 'NPT' | 'Kosu';
@@ -58,6 +58,7 @@ interface Document {
         file_size: number;
     };
     remark: string;
+    imageUrl?: string;
     created_at?: string;
     updated_at?: string;
     updated_by_user?: boolean;
@@ -102,6 +103,10 @@ export default function HomePage() {
     );
     const [isProcessingImage, setIsProcessingImage] = useState(false);
     const [isUploading, setIsUploading] = useState(false);
+    const [imageZoom, setImageZoom] = useState(1);
+    const [imagePosition, setImagePosition] = useState({ x: 0, y: 0 });
+    const [isDragging, setIsDragging] = useState(false);
+    const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
     const fileInputRef = useRef<HTMLInputElement>(null);
 
     // Load persisted processing state on mount
@@ -663,7 +668,49 @@ export default function HomePage() {
             });
 
             if (response.status >= 200 && response.status < 300) {
+                // Update the documents list
                 await loadDocuments();
+                
+                // If the edited document is currently selected in the modal, update it immediately
+                if (selectedDocument && selectedDocument.id === docId) {
+                    // Create a deep copy of the selected document to avoid mutation
+                    const updatedDocument = JSON.parse(JSON.stringify(selectedDocument));
+                    
+                    // Update the field in the document copy
+                    const fieldPath = field.split('.');
+                    let current = updatedDocument;
+                    
+                    // Navigate to the parent of the field to be updated
+                    for (let i = 0; i < fieldPath.length - 1; i++) {
+                        if (current[fieldPath[i]] === undefined) {
+                            current[fieldPath[i]] = {};
+                        }
+                        current = current[fieldPath[i]];
+                    }
+                    
+                    // Update the final field
+                    current[fieldPath[fieldPath.length - 1]] = newValue;
+                    
+                    // Update the updated_at timestamp
+                    updatedDocument.updated_at = new Date().toISOString();
+                    updatedDocument.updated_by_user = true;
+                    
+                    // Add to history if it doesn't exist
+                    if (!updatedDocument.history) {
+                        updatedDocument.history = [];
+                    }
+                    updatedDocument.history.unshift({
+                        field,
+                        old_value: oldValue,
+                        new_value: newValue,
+                        updated_at: new Date().toISOString(),
+                        updated_by: 'user'
+                    });
+                    
+                    // Update the selected document state
+                    setSelectedDocument(updatedDocument);
+                }
+                
                 setEditingCell(null);
             }
         } catch (error) {
@@ -749,6 +796,65 @@ export default function HomePage() {
         setRenamingDocument(null);
         setRenameValue('');
     };
+
+    // Zoom control functions
+    const handleZoomIn = () => {
+        setImageZoom(prev => Math.min(prev + 0.25, 3)); // Max zoom 3x
+    };
+
+    const handleZoomOut = () => {
+        setImageZoom(prev => Math.max(prev - 0.25, 0.5)); // Min zoom 0.5x
+    };
+
+    const handleZoomReset = () => {
+        setImageZoom(1);
+        setImagePosition({ x: 0, y: 0 }); // Reset position when resetting zoom
+    };
+
+    const handleImageWheel = (e: React.WheelEvent) => {
+        e.preventDefault();
+        const delta = e.deltaY;
+        if (delta < 0) {
+            handleZoomIn();
+        } else {
+            handleZoomOut();
+        }
+    };
+
+    // Drag handlers for panning
+    const handleMouseDown = (e: React.MouseEvent) => {
+        if (imageZoom > 1) { // Only allow dragging when zoomed in
+            setIsDragging(true);
+            setDragStart({
+                x: e.clientX - imagePosition.x,
+                y: e.clientY - imagePosition.y
+            });
+        }
+    };
+
+    const handleMouseMove = (e: React.MouseEvent) => {
+        if (isDragging && imageZoom > 1) {
+            setImagePosition({
+                x: e.clientX - dragStart.x,
+                y: e.clientY - dragStart.y
+            });
+        }
+    };
+
+    const handleMouseUp = () => {
+        setIsDragging(false);
+    };
+
+    const handleMouseLeave = () => {
+        setIsDragging(false);
+    };
+
+    // Reset zoom and position when document changes
+    React.useEffect(() => {
+        setImageZoom(1);
+        setImagePosition({ x: 0, y: 0 });
+        setIsDragging(false);
+    }, [selectedDocument]);
 
     // per-request export remains handled by API; removed global export buttons from header
 
@@ -1177,7 +1283,7 @@ export default function HomePage() {
             {/* Document Details Modal */}
             {selectedDocument && (
                 <div className="fixed inset-0 bg-black bg-opacity-50 overflow-y-auto h-full w-full z-50 flex items-start sm:items-center justify-center p-2 sm:p-4">
-                    <div className="relative bg-white rounded-lg sm:rounded-xl md:rounded-2xl shadow-2xl w-full max-w-4xl max-h-[98vh] sm:max-h-[95vh] md:max-h-[90vh] overflow-hidden mt-2 sm:mt-0 modal-content">
+                    <div className="relative bg-white rounded-lg sm:rounded-xl md:rounded-2xl shadow-2xl w-full max-w-7xl max-h-[98vh] sm:max-h-[95vh] md:max-h-[90vh] overflow-hidden mt-2 sm:mt-0 modal-content">
                         {/* Modal Header */}
                         <div className="bg-gradient-to-r from-blue-600 to-blue-700 px-3 sm:px-4 md:px-6 py-3 sm:py-4 sticky top-0 z-10">
                             <div className="flex justify-between items-start sm:items-center gap-3">
@@ -1199,115 +1305,220 @@ export default function HomePage() {
                             </div>
                         </div>
 
-                        {/* Modal Content */}
-                        <div className="overflow-y-auto max-h-[calc(98vh-80px)] sm:max-h-[calc(95vh-100px)] md:max-h-[calc(90vh-120px)]">
-                            {/* Document Info */}
-                            <div className="p-3 sm:p-4 md:p-6 border-b border-gray-200">
-                                <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3 sm:gap-4">
-                                    <div className="bg-gray-50 rounded-lg p-3 sm:p-4">
-                                        <div className="text-xs sm:text-sm text-gray-600 font-medium mb-1">
-                                            File Size
+                        {/* Modal Content - Split Layout */}
+                        <div className="flex flex-col lg:flex-row overflow-hidden max-h-[calc(98vh-80px)] sm:max-h-[calc(95vh-100px)] md:max-h-[calc(90vh-120px)]">
+                            {/* Left Side - Document Data */}
+                            <div className="flex-1 overflow-y-auto border-r border-gray-200">
+                                {/* Document Info */}
+                                <div className="p-3 sm:p-4 md:p-6 border-b border-gray-200">
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3 sm:gap-4">
+                                        <div className="bg-gray-50 rounded-lg p-3 sm:p-4">
+                                            <div className="text-xs sm:text-sm text-gray-600 font-medium mb-1">
+                                                File Size
+                                            </div>
+                                            <div className="font-semibold text-sm sm:text-base md:text-lg text-gray-900">
+                                                {(
+                                                    selectedDocument.metadata
+                                                        .file_size / 1024
+                                                ).toFixed(1)}{' '}
+                                                KB
+                                            </div>
                                         </div>
-                                        <div className="font-semibold text-sm sm:text-base md:text-lg text-gray-900">
-                                            {(
-                                                selectedDocument.metadata
-                                                    .file_size / 1024
-                                            ).toFixed(1)}{' '}
-                                            KB
+                                        <div className="bg-gray-50 rounded-lg p-3 sm:p-4">
+                                            <div className="text-xs sm:text-sm text-gray-600 font-medium mb-1">
+                                                Document Type
+                                            </div>
+                                            <div className="font-semibold text-sm sm:text-base md:text-lg text-gray-900 truncate">
+                                                {
+                                                    selectedDocument.metadata
+                                                        .document_type
+                                                }
+                                            </div>
                                         </div>
-                                    </div>
-                                    <div className="bg-gray-50 rounded-lg p-3 sm:p-4">
-                                        <div className="text-xs sm:text-sm text-gray-600 font-medium mb-1">
-                                            Document Type
-                                        </div>
-                                        <div className="font-semibold text-sm sm:text-base md:text-lg text-gray-900 truncate">
-                                            {
-                                                selectedDocument.metadata
-                                                    .document_type
-                                            }
-                                        </div>
-                                    </div>
-                                    <div className="bg-gray-50 rounded-lg p-3 sm:p-4 sm:col-span-2 xl:col-span-1">
-                                        <div className="text-xs sm:text-sm text-gray-600 font-medium mb-1">
-                                            Processed
-                                        </div>
-                                        <div className="font-semibold text-sm sm:text-base text-gray-900">
-                                            {new Date(
-                                                selectedDocument.metadata.processed_at,
-                                            ).toLocaleString()}
+                                        <div className="bg-gray-50 rounded-lg p-3 sm:p-4 sm:col-span-2 xl:col-span-1">
+                                            <div className="text-xs sm:text-sm text-gray-600 font-medium mb-1">
+                                                Processed
+                                            </div>
+                                            <div className="font-semibold text-sm sm:text-base text-gray-900">
+                                                {new Date(
+                                                    selectedDocument.metadata.processed_at,
+                                                ).toLocaleString()}
+                                            </div>
                                         </div>
                                     </div>
                                 </div>
-                            </div>
 
-                            {/* Document Data */}
-                            <div className="p-4 sm:p-6">
-                                <h4 className="text-base sm:text-lg font-semibold text-gray-900 mb-3 sm:mb-4">
-                                    Extracted Data
-                                </h4>
-                                <div className="bg-gray-50 rounded-lg p-3 sm:p-4 max-h-48 sm:max-h-64 overflow-y-auto">
-                                    <pre className="text-xs sm:text-sm text-gray-900 whitespace-pre-wrap font-mono">
-                                        {JSON.stringify(
-                                            selectedDocument.data,
-                                            null,
-                                            2,
-                                        )}
-                                    </pre>
+                                {/* Document Data */}
+                                <div className="p-4 sm:p-6">
+                                    <h4 className="text-base sm:text-lg font-semibold text-gray-900 mb-3 sm:mb-4">
+                                        Extracted Data
+                                    </h4>
+                                    <div className="space-y-4">
+                                        {renderTableData(selectedDocument)}
+                                    </div>
                                 </div>
-                            </div>
 
-                            {/* Edit History */}
-                            {selectedDocument.history &&
-                                selectedDocument.history.length > 0 && (
-                                    <div className="p-4 sm:p-6 border-t border-gray-200">
-                                        <h4 className="text-base sm:text-lg font-semibold text-gray-900 mb-3 sm:mb-4">
-                                            Edit History
-                                        </h4>
-                                        <div className="space-y-3 max-h-40 sm:max-h-48 overflow-y-auto">
-                                            {selectedDocument.history.map(
-                                                (entry, index) => (
-                                                    <div
-                                                        key={index}
-                                                        className="bg-white border border-gray-200 rounded-lg p-3 sm:p-4"
-                                                    >
-                                                        <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start mb-2 space-y-1 sm:space-y-0">
-                                                            <span className="font-medium text-gray-900 text-sm sm:text-base">
-                                                                {entry.field}
-                                                            </span>
-                                                            <span className="text-xs text-gray-600 font-medium">
-                                                                {new Date(
-                                                                    entry.updated_at,
-                                                                ).toLocaleString()}
-                                                            </span>
-                                                        </div>
-                                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 text-sm">
-                                                            <div>
-                                                                <div className="text-gray-600 mb-1 text-xs sm:text-sm font-medium">
-                                                                    Old Value:
+                                {/* Edit History */}
+                                {selectedDocument.history &&
+                                    selectedDocument.history.length > 0 && (
+                                        <div className="p-4 sm:p-6 border-t border-gray-200">
+                                            <h4 className="text-base sm:text-lg font-semibold text-gray-900 mb-3 sm:mb-4">
+                                                Edit History
+                                            </h4>
+                                            <div className="space-y-3 max-h-40 sm:max-h-48 overflow-y-auto">
+                                                {selectedDocument.history.map(
+                                                    (entry, index) => (
+                                                        <div
+                                                            key={index}
+                                                            className="bg-white border border-gray-200 rounded-lg p-3 sm:p-4"
+                                                        >
+                                                            <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start mb-2 space-y-1 sm:space-y-0">
+                                                                <span className="font-medium text-gray-900 text-sm sm:text-base">
+                                                                    {entry.field}
+                                                                </span>
+                                                                <span className="text-xs text-gray-600 font-medium">
+                                                                    {new Date(
+                                                                        entry.updated_at,
+                                                                    ).toLocaleString()}
+                                                                </span>
+                                                            </div>
+                                                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 text-sm">
+                                                                <div>
+                                                                    <div className="text-gray-600 mb-1 text-xs sm:text-sm font-medium">
+                                                                        Old Value:
+                                                                    </div>
+                                                                    <div className="bg-red-50 border border-red-200 rounded p-2 text-xs break-all text-gray-800 font-mono">
+                                                                        {JSON.stringify(
+                                                                            entry.old_value,
+                                                                        )}
+                                                                    </div>
                                                                 </div>
-                                                                <div className="bg-red-50 border border-red-200 rounded p-2 text-xs break-all text-gray-800 font-mono">
-                                                                    {JSON.stringify(
-                                                                        entry.old_value,
-                                                                    )}
+                                                                <div>
+                                                                    <div className="text-gray-600 mb-1 text-xs sm:text-sm font-medium">
+                                                                        New Value:
+                                                                    </div>
+                                                                    <div className="bg-green-50 border border-green-200 rounded p-2 text-xs break-all text-gray-800 font-mono">
+                                                                        {JSON.stringify(
+                                                                            entry.new_value,
+                                                                        )}
+                                                                    </div>
                                                                 </div>
                                                             </div>
-                                                            <div>
-                                                                <div className="text-gray-600 mb-1 text-xs sm:text-sm font-medium">
-                                                                    New Value:
-                                                                </div>
-                                                                <div className="bg-green-50 border border-green-200 rounded p-2 text-xs break-all text-gray-800 font-mono">
-                                                                    {JSON.stringify(
-                                                                        entry.new_value,
-                                                                    )}
-                                                                </div>
+                                                        </div>
+                                                    ),
+                                                )}
+                                            </div>
+                                        </div>
+                                    )}
+                            </div>
+
+                            {/* Right Side - Document Image */}
+                            <div className="flex-1 lg:max-w-lg xl:max-w-xl overflow-y-auto bg-gray-50">
+                                <div className="p-4 sm:p-6 h-full">
+                                    <div className="flex justify-between items-center mb-3 sm:mb-4">
+                                        <h4 className="text-base sm:text-lg font-semibold text-gray-900">
+                                            Source Document
+                                        </h4>
+                                        {selectedDocument.imageUrl && (
+                                            <div className="flex items-center gap-2">
+                                                <button
+                                                    onClick={handleZoomOut}
+                                                    disabled={imageZoom <= 0.5}
+                                                    className="p-2 rounded-lg bg-white border border-gray-300 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                                                    title="Zoom Out"
+                                                >
+                                                    <ZoomOut size={16} />
+                                                </button>
+                                                <span className="text-sm font-medium text-gray-600 min-w-[50px] text-center">
+                                                    {Math.round(imageZoom * 100)}%
+                                                </span>
+                                                <button
+                                                    onClick={handleZoomIn}
+                                                    disabled={imageZoom >= 3}
+                                                    className="p-2 rounded-lg bg-white border border-gray-300 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                                                    title="Zoom In"
+                                                >
+                                                    <ZoomIn size={16} />
+                                                </button>
+                                                <button
+                                                    onClick={handleZoomReset}
+                                                    className="p-2 rounded-lg bg-white border border-gray-300 hover:bg-gray-50 transition-colors"
+                                                    title="Reset Zoom"
+                                                >
+                                                    <RotateCcw size={16} />
+                                                </button>
+                                                {imageZoom > 1 && (
+                                                    <span className="text-xs text-blue-600 bg-blue-50 px-2 py-1 rounded">
+                                                        Drag to pan
+                                                    </span>
+                                                )}
+                                            </div>
+                                        )}
+                                    </div>
+                                    <div 
+                                        className="bg-white rounded-lg border-2 border-dashed border-gray-300 p-4 h-full min-h-[300px] flex items-center justify-center overflow-hidden"
+                                        onWheel={selectedDocument.imageUrl ? handleImageWheel : undefined}
+                                        onMouseMove={handleMouseMove}
+                                        onMouseUp={handleMouseUp}
+                                        onMouseLeave={handleMouseLeave}
+                                        style={{ 
+                                            cursor: imageZoom > 1 ? (isDragging ? 'grabbing' : 'grab') : 'default'
+                                        }}
+                                    >
+                                        {selectedDocument.imageUrl ? (
+                                            <div className="w-full h-full flex flex-col">
+                                                <div className="flex-1 flex items-center justify-center overflow-hidden">
+                                                    <img
+                                                        src={`${process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8000'}${selectedDocument.imageUrl}`}
+                                                        alt={`Source: ${selectedDocument.metadata.filename}`}
+                                                        className="object-contain rounded-lg shadow-lg transition-transform duration-200 ease-out select-none"
+                                                        style={{
+                                                            transform: `scale(${imageZoom}) translate(${imagePosition.x / imageZoom}px, ${imagePosition.y / imageZoom}px)`,
+                                                            maxWidth: imageZoom > 1 ? 'none' : '100%',
+                                                            maxHeight: imageZoom > 1 ? 'none' : '100%',
+                                                        }}
+                                                        onMouseDown={handleMouseDown}
+                                                        onDragStart={(e) => e.preventDefault()} // Prevent browser's default drag
+                                                        onError={(e) => {
+                                                            const img = e.currentTarget;
+                                                            const fallback = img.nextElementSibling as HTMLElement;
+                                                            img.style.display = 'none';
+                                                            if (fallback) {
+                                                                fallback.style.display = 'flex';
+                                                            }
+                                                        }}
+                                                    />
+                                                    <div className="hidden flex-col items-center justify-center text-gray-500 space-y-2">
+                                                        <div className="text-6xl">📄</div>
+                                                        <div className="text-sm text-center">
+                                                            <div>Image could not be loaded</div>
+                                                            <div className="text-xs text-gray-400 mt-1 break-all">
+                                                                {selectedDocument.imageUrl}
                                                             </div>
                                                         </div>
                                                     </div>
-                                                ),
-                                            )}
-                                        </div>
+                                                </div>
+                                                <div className="mt-3 text-xs text-gray-600 text-center">
+                                                    <div className="font-medium">{selectedDocument.metadata.filename}</div>
+                                                    <div className="text-gray-400 mt-1">
+                                                        Processed: {new Date(selectedDocument.metadata.processed_at).toLocaleString()}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        ) : (
+                                            <div className="flex flex-col items-center justify-center text-gray-500 space-y-3">
+                                                <div className="text-6xl">📄</div>
+                                                <div className="text-sm text-center">
+                                                    <div className="font-medium">No source image available</div>
+                                                    <div className="text-xs text-gray-400 mt-1">
+                                                        The original document image was not saved
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        )}
                                     </div>
-                                )}
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>

@@ -141,6 +141,7 @@ async function processPageWithExternalAPI(
             data: extractedData,
             remark: extractionRemark,
             retry_used: 'no',
+            imageUrl: responseData.imageUrl || null, // Add image URL from backend response
             metadata: {
                 filename: pageFile.name,
                 document_type: documentType,
@@ -266,9 +267,10 @@ async function processImageDirectly(
             id: documentId,
             json_url: `/api/documents/${documentId}/export?format=json`,
             excel_url: `/api/documents/${documentId}/export?format=excel`,
-            data: responseData,
-            remark: 'no-remark',
+            data: responseData.data || responseData,
+            remark: responseData.remark || 'no-remark',
             retry_used: 'no',
+            imageUrl: responseData.imageUrl || null, // Add image URL from backend response
             metadata: {
                 filename: file.name,
                 document_type: documentType,

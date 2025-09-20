@@ -1,4 +1,4 @@
-import mongoose, { Schema, Document } from 'mongoose';
+import mongoose, { Document, Schema } from 'mongoose';
 
 // Base interface for all documents
 interface BaseDocument extends Document {
@@ -6,6 +6,7 @@ interface BaseDocument extends Document {
     json_url: string;
     excel_url: string;
     remark: string;
+    imageUrl?: string; // URL to the extracted/uploaded image
     metadata: {
         filename: string;
         document_type: string;
@@ -73,6 +74,7 @@ const baseSchema = {
     json_url: { type: String, required: true },
     excel_url: { type: String, required: true },
     remark: { type: String, required: true },
+    imageUrl: { type: String, required: false }, // URL to the extracted/uploaded image
     metadata: {
         filename: { type: String, required: true },
         document_type: { type: String, required: true },

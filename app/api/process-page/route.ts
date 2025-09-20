@@ -306,6 +306,7 @@ async function processPageWithExternalAPI(
                     page_number: pageNumber,
                     original_filename: originalFileName,
                 },
+                imageUrl: responseData.imageUrl || null, // Add image URL from backend response
                 remark:
                     responseData.remark || 'Document processed successfully',
                 retry_used: 'no-retry', // Single attempt approach
@@ -330,6 +331,7 @@ async function processPageWithExternalAPI(
                 data: savedDocument.data,
                 metadata: savedDocument.metadata,
                 remark: savedDocument.remark,
+                imageUrl: savedDocument.imageUrl, // Include image URL in response
                 created_at: savedDocument.created_at,
                 updated_at: savedDocument.updated_at,
                 updated_by_user: savedDocument.updated_by_user,

@@ -3,6 +3,7 @@ import {
     AlertCircle,
     Calendar,
     CheckCircle,
+    Expand,
     Eye,
     FileText,
     HardDrive,
@@ -17,6 +18,7 @@ interface Props {
     loadDocuments: () => Promise<void>;
     selectedType: string;
     renderTableData: (doc: any) => React.ReactNode;
+    onViewDetails?: (doc: any) => void; // New prop for opening the details modal
 }
 
 export default function DocumentCard({
@@ -25,6 +27,7 @@ export default function DocumentCard({
     loadDocuments,
     selectedType,
     renderTableData,
+    onViewDetails,
 }: Props) {
     const [deleting, setDeleting] = useState(false);
     const [showDetails, setShowDetails] = useState(false);
@@ -205,6 +208,17 @@ export default function DocumentCard({
                             <Eye className="h-3 w-3 sm:h-4 sm:w-4" />
                             <span>{showDetails ? 'Hide' : 'Show'} Details</span>
                         </button>
+
+                        {onViewDetails && (
+                            <button
+                                onClick={() => onViewDetails(doc)}
+                                className="flex items-center space-x-1 px-3 sm:px-4 py-2 bg-indigo-100 text-indigo-700 rounded-lg hover:bg-indigo-200 transition-colors text-sm"
+                                title="View full details with image"
+                            >
+                                <Expand className="h-3 w-3 sm:h-4 sm:w-4" />
+                                <span>Full View</span>
+                            </button>
+                        )}
 
                         <button
                             onClick={() => setSelectedDocument(doc)}
