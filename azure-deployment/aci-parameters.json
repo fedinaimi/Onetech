@@ -6,7 +6,7 @@
       "value": "onetech-frontend"
     },
     "containerImageName": {
-      "value": "onetechregistry.azurecr.io/onetech-frontend:updated"
+      "value": "onetechregistry.azurecr.io/onetech-frontend:latest"
     },
     "registryServer": {
       "value": "onetechregistry.azurecr.io"
@@ -15,13 +15,13 @@
       "value": "onetechregistry"
     },
     "registryPassword": {
-      "value": "p+zEtFI+QQqYJ5hHgPhF0ZSkI9YpQd7PBSlWKE+f/b+ACRCnyq+K"
+      "value": "YOUR_REGISTRY_PASSWORD_HERE"
     },
     "backendApiUrl": {
       "value": "http://onetech-backend-gdl7h722ruzvs.francecentral.azurecontainer.io:8000"
     },
     "mongodbUri": {
-      "value": "mongodb+srv://habib79:wP04ICrcwg1XsNY7@personal.retbtbr.mongodb.net/onetech"
+      "value": "YOUR_MONGODB_URI_HERE"
     },
     "nextAuthSecret": {
       "value": "onetech-secret-key-2025"

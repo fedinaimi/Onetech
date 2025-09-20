@@ -27,11 +27,13 @@ COPY . .
 ARG MONGODB_URI
 ARG NEXT_PUBLIC_API_URL
 ARG NEXT_PUBLIC_EXTRACT_API
+ARG NEXT_PUBLIC_BACKEND_URL
 
 # Set environment variables for build
 ENV MONGODB_URI=$MONGODB_URI
 ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
 ENV NEXT_PUBLIC_EXTRACT_API=$NEXT_PUBLIC_EXTRACT_API
+ENV NEXT_PUBLIC_BACKEND_URL=$NEXT_PUBLIC_BACKEND_URL
 
 # Next.js collects completely anonymous telemetry data about general usage.
 # Learn more here: https://nextjs.org/telemetry
