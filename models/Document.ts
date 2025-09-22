@@ -15,6 +15,15 @@ interface BaseDocument extends Document {
         [key: string]: any; // Allow additional metadata fields
     };
     retry_used: string;
+    verification_status: 'original' | 'draft' | 'pending_verification' | 'verified' | 'revision_needed';
+    verification_history: Array<{
+        status: 'original' | 'draft' | 'pending_verification' | 'verified' | 'revision_needed';
+        timestamp: Date;
+        user: string;
+        notes?: string;
+    }>;
+    verified_by?: string;
+    verified_at?: Date;
     created_at: Date;
     updated_at: Date;
     updated_by_user: boolean;
@@ -84,6 +93,25 @@ const baseSchema = {
         type: Schema.Types.Mixed,
     },
     retry_used: { type: String, required: true },
+    verification_status: {
+        type: String,
+        enum: ['original', 'draft', 'pending_verification', 'verified', 'revision_needed'],
+        default: 'original' as const,
+    },
+    verification_history: [
+        {
+            status: {
+                type: String,
+                enum: ['original', 'draft', 'pending_verification', 'verified', 'revision_needed'],
+                required: true,
+            },
+            timestamp: { type: Date, default: Date.now },
+            user: { type: String, required: true, default: 'system' },
+            notes: { type: String, required: false },
+        },
+    ],
+    verified_by: { type: String, required: false },
+    verified_at: { type: Date, required: false },
     created_at: { type: Date, default: Date.now },
     updated_at: { type: Date, default: Date.now },
     updated_by_user: { type: Boolean, default: false },

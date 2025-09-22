@@ -12,6 +12,7 @@ import {
     Loader2,
     Save,
     Search,
+    Shield,
     Square,
     Table,
     Trash2,
@@ -29,6 +30,7 @@ interface Props {
     selectedType: string;
     renderTableData?: (doc: any) => React.ReactNode;
     onDeleteDocument?: (id: string, type: string) => Promise<void>;
+    onVerifyDocument?: (doc: any) => void;
     renamingDocument?: { id: string; currentName: string } | null;
     renameValue?: string;
     setRenameValue?: (value: string) => void;
@@ -45,6 +47,7 @@ export default function DocumentList({
     selectedType,
     renderTableData,
     onDeleteDocument,
+    onVerifyDocument,
     renamingDocument,
     renameValue,
     setRenameValue,
@@ -199,6 +202,26 @@ export default function DocumentList({
 
     const handleDeleteCancel = () => {
         setDeleteConfirmation(null);
+    };
+
+    // Helper function to get the button text and action based on verification status
+    const getDocumentActionButton = (doc: any) => {
+        const status = doc.verification_status;
+        if (status === 'verified') {
+            return {
+                text: 'View Details',
+                className: 'flex items-center space-x-1 px-3 py-1.5 bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200 transition-colors text-sm',
+                action: () => setSelectedDocument(doc), // View mode
+                icon: FileText
+            };
+        } else {
+            return {
+                text: 'Verify',
+                className: 'flex items-center space-x-1 px-3 py-1.5 bg-green-100 text-green-700 rounded-lg hover:bg-green-200 transition-colors text-sm',
+                action: () => onVerifyDocument?.(doc), // Edit mode
+                icon: Shield
+            };
+        }
     };
 
     // Bulk delete functions
@@ -780,18 +803,6 @@ export default function DocumentList({
                                                     </div>
                                                 </div>
                                                 <div className="flex items-center space-x-2">
-                                                    <button
-                                                        onClick={() =>
-                                                            setSelectedDocument(
-                                                                doc,
-                                                            )
-                                                        }
-                                                        className={`flex items-center space-x-1 px-3 py-1.5 bg-${color}-100 text-${color}-700 rounded-lg hover:bg-${color}-200 transition-colors text-sm`}
-                                                    >
-                                                        <span>
-                                                            View Details
-                                                        </span>
-                                                    </button>
                                                     {renderTableData ? (
                                                         <button
                                                             onClick={() =>
@@ -809,6 +820,23 @@ export default function DocumentList({
                                                             <span>Fields</span>
                                                         </button>
                                                     ) : null}
+                                                    
+                                                    {/* Document Action Button (Verify or View Details) */}
+                                                    {(() => {
+                                                        const buttonConfig = getDocumentActionButton(doc);
+                                                        const Icon = buttonConfig.icon;
+                                                        return (
+                                                            <button
+                                                                onClick={buttonConfig.action}
+                                                                className={buttonConfig.className}
+                                                                title={buttonConfig.text}
+                                                            >
+                                                                <Icon className="h-4 w-4" />
+                                                                <span>{buttonConfig.text}</span>
+                                                            </button>
+                                                        );
+                                                    })()}
+                                                    
                                                     {onDeleteDocument && (
                                                         <button
                                                             onClick={() =>
@@ -1071,16 +1099,20 @@ export default function DocumentList({
                                                         </td>
                                                         <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                                                             <div className="flex items-center space-x-2">
-                                                                <button
-                                                                    onClick={() =>
-                                                                        setSelectedDocument(
-                                                                            doc,
-                                                                        )
-                                                                    }
-                                                                    className={`text-${color}-600 hover:text-${color}-900`}
-                                                                >
-                                                                    View Details
-                                                                </button>
+                                                                {(() => {
+                                                                    const buttonConfig = getDocumentActionButton(doc);
+                                                                    const Icon = buttonConfig.icon;
+                                                                    return (
+                                                                        <button
+                                                                            onClick={buttonConfig.action}
+                                                                            className={buttonConfig.className}
+                                                                            title={buttonConfig.text}
+                                                                        >
+                                                                            <Icon className="h-4 w-4" />
+                                                                            <span>{buttonConfig.text}</span>
+                                                                        </button>
+                                                                    );
+                                                                })()}
                                                                 {onDeleteDocument && (
                                                                     <button
                                                                         onClick={() =>

@@ -2,13 +2,14 @@ import axios from 'axios';
 import {
     AlertCircle,
     Calendar,
-    CheckCircle,
     Expand,
     Eye,
     FileText,
     HardDrive,
     History,
-    Trash,
+    Shield,
+    ShieldCheck,
+    Trash
 } from 'lucide-react';
 import React, { useState } from 'react';
 
@@ -19,6 +20,7 @@ interface Props {
     selectedType: string;
     renderTableData: (doc: any) => React.ReactNode;
     onViewDetails?: (doc: any) => void; // New prop for opening the details modal
+    onVerify?: (doc: any) => void; // New prop for opening verification modal
 }
 
 export default function DocumentCard({
@@ -28,6 +30,7 @@ export default function DocumentCard({
     selectedType,
     renderTableData,
     onViewDetails,
+    onVerify,
 }: Props) {
     const [deleting, setDeleting] = useState(false);
     const [showDetails, setShowDetails] = useState(false);
@@ -97,6 +100,48 @@ export default function DocumentCard({
         return colors[type as keyof typeof colors] || 'gray';
     };
 
+    const getVerificationStatusBadge = (verificationStatus: string) => {
+        const statusConfig = {
+            original: { 
+                color: 'bg-gray-100 text-gray-700 border-gray-200', 
+                icon: AlertCircle, 
+                label: 'Original' 
+            },
+            draft: { 
+                color: 'bg-yellow-100 text-yellow-700 border-yellow-200', 
+                icon: Shield, 
+                label: 'Draft' 
+            },
+            pending_verification: { 
+                color: 'bg-blue-100 text-blue-700 border-blue-200', 
+                icon: Shield, 
+                label: 'Pending Review' 
+            },
+            verified: { 
+                color: 'bg-green-100 text-green-700 border-green-200', 
+                icon: ShieldCheck, 
+                label: 'Verified' 
+            },
+            revision_needed: { 
+                color: 'bg-red-100 text-red-700 border-red-200', 
+                icon: AlertCircle, 
+                label: 'Needs Revision' 
+            },
+        };
+        
+        // Fallback to updated_by_user if verification_status is not available
+        if (!verificationStatus) {
+            return doc.updated_by_user ? statusConfig.draft : statusConfig.original;
+        }
+        
+        return statusConfig[verificationStatus as keyof typeof statusConfig] || statusConfig.original;
+    };
+
+    const shouldShowVerificationButton = () => {
+        const status = doc.verification_status;
+        return status !== 'verified' && status !== 'pending_verification';
+    };
+
     const color = getDocumentTypeColor(selectedType);
 
     return (
@@ -134,21 +179,18 @@ export default function DocumentCard({
                     </div>
 
                     {/* Status Badge */}
-                    {doc.updated_by_user ? (
-                        <div className="flex items-center space-x-1 px-2 sm:px-3 py-1 bg-orange-100 border border-orange-200 rounded-full">
-                            <CheckCircle className="h-3 w-3 sm:h-4 sm:w-4 text-orange-600" />
-                            <span className="text-orange-700 text-xs sm:text-sm font-medium">
-                                Modified
-                            </span>
-                        </div>
-                    ) : (
-                        <div className="flex items-center space-x-1 px-2 sm:px-3 py-1 bg-green-100 border border-green-200 rounded-full">
-                            <AlertCircle className="h-3 w-3 sm:h-4 sm:w-4 text-green-600" />
-                            <span className="text-green-700 text-xs sm:text-sm font-medium">
-                                Original
-                            </span>
-                        </div>
-                    )}
+                    {(() => {
+                        const statusBadge = getVerificationStatusBadge(doc.verification_status);
+                        const StatusIcon = statusBadge.icon;
+                        return (
+                            <div className={`flex items-center space-x-1 px-2 sm:px-3 py-1 border rounded-full ${statusBadge.color}`}>
+                                <StatusIcon className="h-3 w-3 sm:h-4 sm:w-4" />
+                                <span className="text-xs sm:text-sm font-medium">
+                                    {statusBadge.label}
+                                </span>
+                            </div>
+                        );
+                    })()}
                 </div>
             </div>
 
@@ -217,6 +259,18 @@ export default function DocumentCard({
                             >
                                 <Expand className="h-3 w-3 sm:h-4 sm:w-4" />
                                 <span>Full View</span>
+                            </button>
+                        )}
+
+                        {/* Verification Button */}
+                        {shouldShowVerificationButton() && onVerify && (
+                            <button
+                                onClick={() => onVerify(doc)}
+                                className="flex items-center space-x-1 px-3 sm:px-4 py-2 bg-green-100 text-green-700 rounded-lg hover:bg-green-200 transition-colors text-sm"
+                                title="Verify document data"
+                            >
+                                <Shield className="h-3 w-3 sm:h-4 sm:w-4" />
+                                <span>Verify</span>
                             </button>
                         )}
 

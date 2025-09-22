@@ -8,6 +8,7 @@ import {
     getDocuments,
     saveDocument,
     updateDocumentField,
+    updateDocumentVerification,
 } from '@/lib/documentUtils';
 import dbConnect from '@/lib/mongodb';
 import { NextRequest, NextResponse } from 'next/server';
@@ -99,7 +100,8 @@ export async function PUT(request: NextRequest) {
     try {
         await dbConnect();
 
-        const { id, type, field, oldValue, newValue } = await request.json();
+        const body = await request.json();
+        const { id, type, field, oldValue, newValue, verification_status, verified_by, verified_at, verification_notes, data, metadata } = body;
 
         if (!type || !['Rebut', 'NPT', 'Kosu'].includes(type)) {
             return NextResponse.json(
@@ -108,6 +110,30 @@ export async function PUT(request: NextRequest) {
             );
         }
 
+        // Handle verification status updates
+        if (verification_status) {
+            const updates = {
+                verification_status,
+                verified_by,
+                verified_at: verified_at ? new Date(verified_at) : undefined,
+                verification_notes,
+                data,
+                metadata,
+            };
+
+            const document = await updateDocumentVerification(id, type, updates);
+
+            if (!document) {
+                return NextResponse.json(
+                    { error: 'Document not found' },
+                    { status: 404 },
+                );
+            }
+
+            return NextResponse.json(document);
+        }
+
+        // Handle regular field updates
         const document = await updateDocumentField(
             id,
             type,

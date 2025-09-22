@@ -1,9 +1,9 @@
-import { RebutModel, NPTModel, KosuModel } from '@/models/Document';
 import type {
-    RebutDocument,
-    NPTDocument,
     KosuDocument,
+    NPTDocument,
+    RebutDocument,
 } from '@/models/Document';
+import { KosuModel, NPTModel, RebutModel } from '@/models/Document';
 
 export type DocumentType = 'Rebut' | 'NPT' | 'Kosu';
 export type Document = RebutDocument | NPTDocument | KosuDocument;
@@ -60,6 +60,60 @@ export const updateDocumentField = async (
     return await Model.findOneAndUpdate(
         { id },
         { ...updateData, ...fieldUpdate },
+        { new: true },
+    );
+};
+
+export const updateDocumentVerification = async (
+    id: string,
+    type: DocumentType,
+    updates: {
+        data?: any;
+        metadata?: any;
+        verification_status: 'original' | 'draft' | 'pending_verification' | 'verified' | 'revision_needed';
+        verified_by?: string;
+        verified_at?: Date;
+        verification_notes?: string;
+    },
+) => {
+    const Model = getModelByType(type);
+
+    const updateData: any = {
+        updated_at: new Date(),
+        verification_status: updates.verification_status,
+        $push: {
+            verification_history: {
+                status: updates.verification_status,
+                timestamp: new Date(),
+                user: updates.verified_by || 'user',
+                notes: updates.verification_notes,
+            },
+        },
+    };
+
+    // If data is being updated, mark as modified by user
+    if (updates.data) {
+        updateData.data = updates.data;
+        updateData.updated_by_user = true;
+    }
+
+    // If metadata is being updated
+    if (updates.metadata) {
+        updateData.metadata = updates.metadata;
+    }
+
+    // Add verification specific fields
+    if (updates.verified_by) {
+        updateData.verified_by = updates.verified_by;
+    }
+    
+    if (updates.verified_at) {
+        updateData.verified_at = updates.verified_at;
+    }
+
+    return await Model.findOneAndUpdate(
+        { id },
+        updateData,
         { new: true },
     );
 };
