@@ -9,7 +9,7 @@ import {
     History,
     Shield,
     ShieldCheck,
-    Trash
+    Trash,
 } from 'lucide-react';
 import React, { useState } from 'react';
 
@@ -102,39 +102,44 @@ export default function DocumentCard({
 
     const getVerificationStatusBadge = (verificationStatus: string) => {
         const statusConfig = {
-            original: { 
-                color: 'bg-gray-100 text-gray-700 border-gray-200', 
-                icon: AlertCircle, 
-                label: 'Original' 
+            original: {
+                color: 'bg-gray-100 text-gray-700 border-gray-200',
+                icon: AlertCircle,
+                label: 'Original',
             },
-            draft: { 
-                color: 'bg-yellow-100 text-yellow-700 border-yellow-200', 
-                icon: Shield, 
-                label: 'Draft' 
+            draft: {
+                color: 'bg-yellow-100 text-yellow-700 border-yellow-200',
+                icon: Shield,
+                label: 'Draft',
             },
-            pending_verification: { 
-                color: 'bg-blue-100 text-blue-700 border-blue-200', 
-                icon: Shield, 
-                label: 'Pending Review' 
+            pending_verification: {
+                color: 'bg-blue-100 text-blue-700 border-blue-200',
+                icon: Shield,
+                label: 'Pending Review',
             },
-            verified: { 
-                color: 'bg-green-100 text-green-700 border-green-200', 
-                icon: ShieldCheck, 
-                label: 'Verified' 
+            verified: {
+                color: 'bg-green-100 text-green-700 border-green-200',
+                icon: ShieldCheck,
+                label: 'Verified',
             },
-            revision_needed: { 
-                color: 'bg-red-100 text-red-700 border-red-200', 
-                icon: AlertCircle, 
-                label: 'Needs Revision' 
+            revision_needed: {
+                color: 'bg-red-100 text-red-700 border-red-200',
+                icon: AlertCircle,
+                label: 'Needs Revision',
             },
         };
-        
+
         // Fallback to updated_by_user if verification_status is not available
         if (!verificationStatus) {
-            return doc.updated_by_user ? statusConfig.draft : statusConfig.original;
+            return doc.updated_by_user
+                ? statusConfig.draft
+                : statusConfig.original;
         }
-        
-        return statusConfig[verificationStatus as keyof typeof statusConfig] || statusConfig.original;
+
+        return (
+            statusConfig[verificationStatus as keyof typeof statusConfig] ||
+            statusConfig.original
+        );
     };
 
     const shouldShowVerificationButton = () => {
@@ -180,10 +185,14 @@ export default function DocumentCard({
 
                     {/* Status Badge */}
                     {(() => {
-                        const statusBadge = getVerificationStatusBadge(doc.verification_status);
+                        const statusBadge = getVerificationStatusBadge(
+                            doc.verification_status,
+                        );
                         const StatusIcon = statusBadge.icon;
                         return (
-                            <div className={`flex items-center space-x-1 px-2 sm:px-3 py-1 border rounded-full ${statusBadge.color}`}>
+                            <div
+                                className={`flex items-center space-x-1 px-2 sm:px-3 py-1 border rounded-full ${statusBadge.color}`}
+                            >
                                 <StatusIcon className="h-3 w-3 sm:h-4 sm:w-4" />
                                 <span className="text-xs sm:text-sm font-medium">
                                     {statusBadge.label}

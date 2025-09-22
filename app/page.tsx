@@ -7,14 +7,7 @@ import ImageProcessor from '@/components/ImageProcessor';
 import PageProcessor from '@/components/PageProcessor';
 import { KosuTable, NPTTable, RebutTable } from '@/components/TableRenderers';
 import axios from 'axios';
-import {
-    Clock,
-    FileText,
-    Loader2,
-    Plus,
-    Upload,
-    Users
-} from 'lucide-react';
+import { Clock, FileText, Loader2, Plus, Upload, Users } from 'lucide-react';
 import React, { useCallback, useRef, useState } from 'react';
 
 type DocumentType = 'Rebut' | 'NPT' | 'Kosu';
@@ -70,7 +63,12 @@ interface Document {
     created_at?: string;
     updated_at?: string;
     updated_by_user?: boolean;
-    verification_status?: 'original' | 'draft' | 'pending_verification' | 'verified' | 'revision_needed';
+    verification_status?:
+        | 'original'
+        | 'draft'
+        | 'pending_verification'
+        | 'verified'
+        | 'revision_needed';
     history?: Array<{
         field: string;
         old_value: any;
@@ -115,10 +113,6 @@ export default function HomePage() {
     );
     const [isProcessingImage, setIsProcessingImage] = useState(false);
     const [isUploading, setIsUploading] = useState(false);
-    const [imageZoom, setImageZoom] = useState(1);
-    const [imagePosition, setImagePosition] = useState({ x: 0, y: 0 });
-    const [isDragging, setIsDragging] = useState(false);
-    const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
     const fileInputRef = useRef<HTMLInputElement>(null);
 
     // Load persisted processing state on mount
@@ -814,11 +808,20 @@ export default function HomePage() {
     const handleVerificationSave = async (
         documentId: string,
         updates: any,
-        newStatus: 'original' | 'draft' | 'pending_verification' | 'verified' | 'revision_needed'
+        newStatus:
+            | 'original'
+            | 'draft'
+            | 'pending_verification'
+            | 'verified'
+            | 'revision_needed',
     ) => {
         try {
-            console.log('Verification Save - Input:', { documentId, updates, newStatus });
-            
+            console.log('Verification Save - Input:', {
+                documentId,
+                updates,
+                newStatus,
+            });
+
             const response = await axios.put('/api/documents', {
                 id: documentId,
                 type: selectedType,
@@ -828,29 +831,44 @@ export default function HomePage() {
 
             if (response.status === 200) {
                 console.log('Verification Save - Response:', response.data);
-                
+
                 // Reload documents to get the updated data
                 await loadDocuments();
-                
+
                 // Re-fetch the updated documents list and update modal states
-                const refreshResponse = await axios.get(`/api/documents?type=${selectedType}`);
+                const refreshResponse = await axios.get(
+                    `/api/documents?type=${selectedType}`,
+                );
                 const refreshedDocuments = refreshResponse.data;
-                
-                console.log('Verification Save - Refreshed Documents:', refreshedDocuments);
-                
+
+                console.log(
+                    'Verification Save - Refreshed Documents:',
+                    refreshedDocuments,
+                );
+
                 // Update the verifying document if it's the same one
                 if (verifyingDocument && verifyingDocument.id === documentId) {
-                    const updatedDoc = refreshedDocuments.find((doc: any) => doc.id === documentId);
-                    console.log('Verification Save - Updated Verifying Doc:', updatedDoc);
+                    const updatedDoc = refreshedDocuments.find(
+                        (doc: any) => doc.id === documentId,
+                    );
+                    console.log(
+                        'Verification Save - Updated Verifying Doc:',
+                        updatedDoc,
+                    );
                     if (updatedDoc) {
                         setVerifyingDocument(updatedDoc);
                     }
                 }
-                
+
                 // Also update selected document if it's the same one
                 if (selectedDocument && selectedDocument.id === documentId) {
-                    const updatedDoc = refreshedDocuments.find((doc: any) => doc.id === documentId);
-                    console.log('Verification Save - Updated Selected Doc:', updatedDoc);
+                    const updatedDoc = refreshedDocuments.find(
+                        (doc: any) => doc.id === documentId,
+                    );
+                    console.log(
+                        'Verification Save - Updated Selected Doc:',
+                        updatedDoc,
+                    );
                     if (updatedDoc) {
                         setSelectedDocument(updatedDoc);
                     }
@@ -865,66 +883,6 @@ export default function HomePage() {
     const handleVerifyDocument = (doc: Document) => {
         setVerifyingDocument(doc);
     };
-
-    // Zoom control functions
-    const handleZoomIn = () => {
-        setImageZoom(prev => Math.min(prev + 0.25, 3)); // Max zoom 3x
-    };
-
-    const handleZoomOut = () => {
-        setImageZoom(prev => Math.max(prev - 0.25, 0.5)); // Min zoom 0.5x
-    };
-
-    const handleZoomReset = () => {
-        setImageZoom(1);
-        setImagePosition({ x: 0, y: 0 }); // Reset position when resetting zoom
-    };
-
-    const handleImageWheel = (e: React.WheelEvent) => {
-        e.preventDefault();
-        const delta = e.deltaY;
-        if (delta < 0) {
-            handleZoomIn();
-        } else {
-            handleZoomOut();
-        }
-    };
-
-    // Drag handlers for panning
-    const handleMouseDown = (e: React.MouseEvent) => {
-        if (imageZoom > 1) {
-            // Only allow dragging when zoomed in
-            setIsDragging(true);
-            setDragStart({
-                x: e.clientX - imagePosition.x,
-                y: e.clientY - imagePosition.y,
-            });
-        }
-    };
-
-    const handleMouseMove = (e: React.MouseEvent) => {
-        if (isDragging && imageZoom > 1) {
-            setImagePosition({
-                x: e.clientX - dragStart.x,
-                y: e.clientY - dragStart.y,
-            });
-        }
-    };
-
-    const handleMouseUp = () => {
-        setIsDragging(false);
-    };
-
-    const handleMouseLeave = () => {
-        setIsDragging(false);
-    };
-
-    // Reset zoom and position when document changes
-    React.useEffect(() => {
-        setImageZoom(1);
-        setImagePosition({ x: 0, y: 0 });
-        setIsDragging(false);
-    }, [selectedDocument]);
 
     // per-request export remains handled by API; removed global export buttons from header
 
@@ -1361,7 +1319,6 @@ export default function HomePage() {
                 }}
                 onSave={handleVerificationSave}
                 selectedType={selectedType}
-                mode="edit"
             />
         </div>
     );

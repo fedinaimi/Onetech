@@ -50,7 +50,23 @@ ACR_PASSWORD=$(az acr credential show --name $ACR_NAME --resource-group $RESOURC
 
 # Build and push Docker image
 echo -e "${YELLOW}🏗️  Building Docker image...${NC}"
-docker build -t $ACR_LOGIN_SERVER/$IMAGE_NAME:latest .
+
+# Use environment variables from .env file
+BACKEND_API_URL="http://onetech-backend-gdl7h722ruzvs.francecentral.azurecontainer.io:8000"
+MONGODB_URI="mongodb+srv://habib79:wP04ICrcwg1XsNY7@personal.retbtbr.mongodb.net/onetech"
+NEXTAUTH_SECRET="your-nextauth-secret-here"
+
+echo -e "${GREEN}Using Backend API URL: $BACKEND_API_URL${NC}"
+echo -e "${GREEN}Using MongoDB URI: ${MONGODB_URI:0:20}...${NC}"
+
+# Build with build arguments for AMD64 platform (Azure compatibility)
+docker build \
+  --platform linux/amd64 \
+  --build-arg MONGODB_URI="$MONGODB_URI" \
+  --build-arg NEXT_PUBLIC_API_URL="$BACKEND_API_URL" \
+  --build-arg NEXT_PUBLIC_EXTRACT_API="$BACKEND_API_URL/extract/" \
+  --build-arg NEXT_PUBLIC_BACKEND_URL="$BACKEND_API_URL" \
+  -t $ACR_LOGIN_SERVER/$IMAGE_NAME:latest .
 
 echo -e "${YELLOW}📤 Pushing Docker image to ACR...${NC}"
 az acr login --name $ACR_NAME
@@ -58,13 +74,6 @@ docker push $ACR_LOGIN_SERVER/$IMAGE_NAME:latest
 
 # Deploy to Azure Container Instances
 echo -e "${YELLOW}🚀 Deploying to Azure Container Instances...${NC}"
-
-# Prompt for required secrets
-read -p "Enter Backend API URL: " BACKEND_API_URL
-read -s -p "Enter MongoDB URI: " MONGODB_URI
-echo
-read -s -p "Enter NextAuth Secret: " NEXTAUTH_SECRET
-echo
 
 az deployment group create \
   --resource-group $RESOURCE_GROUP \

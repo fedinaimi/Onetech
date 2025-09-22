@@ -1,29 +1,41 @@
 'use client';
 
-import { AlertCircle, Check, Download, Edit2, RotateCw, Save, X, ZoomIn, ZoomOut } from 'lucide-react';
+import {
+    AlertCircle,
+    Check,
+    Download,
+    Edit2,
+    RotateCw,
+    Save,
+    X,
+    ZoomIn,
+    ZoomOut,
+} from 'lucide-react';
 import React, { useEffect, useState } from 'react';
 import { KosuTable, NPTTable, RebutTable } from './TableRenderers';
 
-type VerificationStatus = 'original' | 'draft' | 'pending_verification' | 'verified' | 'revision_needed';
-type ModalMode = 'view' | 'edit';
+type VerificationStatus =
+    | 'original'
+    | 'draft'
+    | 'pending_verification'
+    | 'verified'
+    | 'revision_needed';
 
 interface DocumentVerificationModalProps {
     document: any;
     isOpen: boolean;
     onClose: () => void;
-    onSave: (documentId: string, updates: any, newStatus: VerificationStatus) => Promise<void>;
+    onSave: (
+        documentId: string,
+        updates: any,
+        newStatus: VerificationStatus,
+    ) => Promise<void>;
     selectedType: string;
-    mode?: ModalMode; // 'view' for verified docs, 'edit' for verification
 }
 
-export const DocumentVerificationModal: React.FC<DocumentVerificationModalProps> = ({
-    document,
-    isOpen,
-    onClose,
-    onSave,
-    selectedType,
-    mode = 'edit', // Default to edit mode for backward compatibility
-}) => {
+export const DocumentVerificationModal: React.FC<
+    DocumentVerificationModalProps
+> = ({ document, isOpen, onClose, onSave, selectedType }) => {
     const [editedData, setEditedData] = useState<any>(null);
     const [hasChanges, setHasChanges] = useState(false);
     const [saving, setSaving] = useState(false);
@@ -32,12 +44,12 @@ export const DocumentVerificationModal: React.FC<DocumentVerificationModalProps>
     const [verificationNotes, setVerificationNotes] = useState('');
     const [showConfirmDialog, setShowConfirmDialog] = useState(false);
     const [showVerifiedMessage, setShowVerifiedMessage] = useState(false);
-    
+
     // Image panning states
     const [imagePosition, setImagePosition] = useState({ x: 0, y: 0 });
     const [isDragging, setIsDragging] = useState(false);
     const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
-    
+
     // Table editing states (same as in main page)
     const [editingCell, setEditingCell] = useState<{
         doc: string;
@@ -53,15 +65,19 @@ export const DocumentVerificationModal: React.FC<DocumentVerificationModalProps>
             // Extract the actual document data
             // Handle both doc.data and doc.data.data structures
             let documentData = document.data;
-            
+
             // If the data has nested data property, use that instead
-            if (documentData && typeof documentData === 'object' && documentData.data) {
+            if (
+                documentData &&
+                typeof documentData === 'object' &&
+                documentData.data
+            ) {
                 documentData = documentData.data;
             }
-            
+
             console.log('Verification Modal - Document:', document);
             console.log('Verification Modal - Document Data:', documentData);
-            
+
             setEditedData(JSON.parse(JSON.stringify(documentData)));
             setHasChanges(false);
             setImageZoom(100);
@@ -86,7 +102,7 @@ export const DocumentVerificationModal: React.FC<DocumentVerificationModalProps>
         newValue: any,
     ) => {
         if (!editedData) return;
-        
+
         // Update the editedData directly for immediate UI feedback
         const newData = { ...editedData };
         const fieldPath = field.replace('data.', '').split('.');
@@ -102,7 +118,7 @@ export const DocumentVerificationModal: React.FC<DocumentVerificationModalProps>
 
         // Update the final field
         current[fieldPath[fieldPath.length - 1]] = newValue;
-        
+
         setEditedData(newData);
         setHasChanges(true);
         setEditingCell(null);
@@ -133,28 +149,28 @@ export const DocumentVerificationModal: React.FC<DocumentVerificationModalProps>
 
     const handleSaveDraft = async () => {
         if (!hasChanges || !editedData) return;
-        
+
         setSaving(true);
         try {
             // Generate the new filename format
-            const formattedFilename = generateFormattedFilename({ 
-                data: editedData, 
-                metadata: document.metadata 
+            const formattedFilename = generateFormattedFilename({
+                data: editedData,
+                metadata: document.metadata,
             });
-            
+
             // Prepare the data with updated filename
             const updates = {
                 data: editedData,
                 metadata: {
                     ...document.metadata,
-                    filename: formattedFilename
-                }
+                    filename: formattedFilename,
+                },
             };
-            
+
             console.log('Saving draft with data:', updates);
             console.log('Original metadata:', document.metadata);
             console.log('New filename:', formattedFilename);
-            
+
             await onSave(document.id, updates, 'draft');
             setHasChanges(false);
         } catch (error) {
@@ -173,11 +189,11 @@ export const DocumentVerificationModal: React.FC<DocumentVerificationModalProps>
         setSaving(true);
         try {
             // Generate the new filename format
-            const formattedFilename = generateFormattedFilename({ 
-                data: editedData, 
-                metadata: document.metadata 
+            const formattedFilename = generateFormattedFilename({
+                data: editedData,
+                metadata: document.metadata,
             });
-            
+
             const updates: any = {
                 data: editedData,
                 verified_by: 'current_user', // Replace with actual user identification
@@ -185,22 +201,22 @@ export const DocumentVerificationModal: React.FC<DocumentVerificationModalProps>
                 // Update metadata with new filename format
                 metadata: {
                     ...document.metadata,
-                    filename: formattedFilename
-                }
+                    filename: formattedFilename,
+                },
             };
-            
+
             if (verificationNotes.trim()) {
                 updates.verification_notes = verificationNotes;
             }
-            
+
             console.log('Verifying document with updates:', updates);
             console.log('Original metadata:', document.metadata);
             console.log('New filename:', formattedFilename);
-            
+
             await onSave(document.id, updates, 'verified');
             setShowConfirmDialog(false);
             setShowVerifiedMessage(true);
-            
+
             // Auto-close after showing success message
             setTimeout(() => {
                 onClose();
@@ -227,7 +243,10 @@ export const DocumentVerificationModal: React.FC<DocumentVerificationModalProps>
     const handleMouseDown = (e: React.MouseEvent) => {
         if (imageZoom > 100) {
             setIsDragging(true);
-            setDragStart({ x: e.clientX - imagePosition.x, y: e.clientY - imagePosition.y });
+            setDragStart({
+                x: e.clientX - imagePosition.x,
+                y: e.clientY - imagePosition.y,
+            });
         }
     };
 
@@ -245,21 +264,27 @@ export const DocumentVerificationModal: React.FC<DocumentVerificationModalProps>
 
     const generateFormattedFilename = (doc: any) => {
         console.log('generateFormattedFilename - Full doc object:', doc);
-        
+
         if (!doc.data) {
-            console.log('generateFormattedFilename - No data found, using fallback:', doc.metadata.filename);
+            console.log(
+                'generateFormattedFilename - No data found, using fallback:',
+                doc.metadata.filename,
+            );
             return doc.metadata.filename;
         }
-        
+
         // Extract data based on document type
         const docType = selectedType;
         let of = '';
         let date = '';
         let ligne = '';
         let equipe = '';
-        
-        console.log('generateFormattedFilename - Input:', { docType, data: doc.data });
-        
+
+        console.log('generateFormattedFilename - Input:', {
+            docType,
+            data: doc.data,
+        });
+
         if (docType === 'Rebut') {
             // For Rebut documents, look in header
             const header = doc.data.header || {};
@@ -281,23 +306,35 @@ export const DocumentVerificationModal: React.FC<DocumentVerificationModalProps>
             ligne = doc.data['Nom Ligne'] || doc.data['Code ligne'] || '';
             equipe = doc.data['Equipe'] || '';
         }
-        
-        console.log('generateFormattedFilename - Extracted values:', { of, date, ligne, equipe });
-        
+
+        console.log('generateFormattedFilename - Extracted values:', {
+            of,
+            date,
+            ligne,
+            equipe,
+        });
+
         // Clean and format the values
         const cleanValue = (val: any) => {
             if (!val) return '';
             // For dates, remove all non-alphanumeric characters and keep only numbers and letters
-            return String(val).replace(/[^\w\d]/g, '').substring(0, 15);
+            return String(val)
+                .replace(/[^\w\d]/g, '')
+                .substring(0, 15);
         };
-        
+
         const formattedOF = cleanValue(of);
         const formattedDate = cleanValue(date);
         const formattedLigne = cleanValue(ligne);
         const formattedEquipe = cleanValue(equipe);
-        
-        console.log('generateFormattedFilename - Cleaned values:', { formattedOF, formattedDate, formattedLigne, formattedEquipe });
-        
+
+        console.log('generateFormattedFilename - Cleaned values:', {
+            formattedOF,
+            formattedDate,
+            formattedLigne,
+            formattedEquipe,
+        });
+
         // Create filename in format: Doctype-OF_DATE_LIGNE_EQUIPE
         // Make it more flexible - only require OF, date, and ligne (equipe is optional)
         if (formattedOF || formattedDate || formattedLigne) {
@@ -306,38 +343,44 @@ export const DocumentVerificationModal: React.FC<DocumentVerificationModalProps>
             if (formattedDate) parts.push(formattedDate);
             if (formattedLigne) parts.push(formattedLigne);
             if (formattedEquipe) parts.push(formattedEquipe);
-            
+
             const newFilename = parts.join('_');
-            console.log('generateFormattedFilename - Generated filename:', newFilename);
+            console.log(
+                'generateFormattedFilename - Generated filename:',
+                newFilename,
+            );
             return newFilename;
         }
-        
+
         // Fallback to original filename if data is missing
-        console.log('generateFormattedFilename - Using fallback filename:', doc.metadata.filename);
+        console.log(
+            'generateFormattedFilename - Using fallback filename:',
+            doc.metadata.filename,
+        );
         return doc.metadata.filename;
     };
 
     const downloadImage = async () => {
         if (!document.imageUrl) return;
-        
+
         try {
-            const imageUrl = document.imageUrl.startsWith('http') 
-                ? document.imageUrl 
+            const imageUrl = document.imageUrl.startsWith('http')
+                ? document.imageUrl
                 : `${process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8000'}${document.imageUrl}`;
-            
+
             const response = await fetch(imageUrl);
             const blob = await response.blob();
             const url = window.URL.createObjectURL(blob);
             const a = window.document.createElement('a');
             a.href = url;
-            
+
             // Use formatted filename
-            const formattedFilename = generateFormattedFilename({ 
-                data: editedData, 
-                metadata: document.metadata 
+            const formattedFilename = generateFormattedFilename({
+                data: editedData,
+                metadata: document.metadata,
             });
             a.download = `${formattedFilename}_original.jpg`;
-            
+
             window.document.body.appendChild(a);
             a.click();
             window.document.body.removeChild(a);
@@ -351,25 +394,37 @@ export const DocumentVerificationModal: React.FC<DocumentVerificationModalProps>
         const statusConfig = {
             original: { color: 'bg-gray-100 text-gray-800', label: 'Original' },
             draft: { color: 'bg-yellow-100 text-yellow-800', label: 'Draft' },
-            pending_verification: { color: 'bg-blue-100 text-blue-800', label: 'Pending Verification' },
-            verified: { color: 'bg-green-100 text-green-800', label: 'Verified' },
-            revision_needed: { color: 'bg-red-100 text-red-800', label: 'Revision Needed' },
+            pending_verification: {
+                color: 'bg-blue-100 text-blue-800',
+                label: 'Pending Verification',
+            },
+            verified: {
+                color: 'bg-green-100 text-green-800',
+                label: 'Verified',
+            },
+            revision_needed: {
+                color: 'bg-red-100 text-red-800',
+                label: 'Revision Needed',
+            },
         };
-        
+
         const config = statusConfig[status] || statusConfig.original;
         return (
-            <span className={`px-2 py-1 text-xs font-medium rounded-full ${config.color}`}>
+            <span
+                className={`px-2 py-1 text-xs font-medium rounded-full ${config.color}`}
+            >
                 {config.label}
             </span>
         );
     };
 
     const renderDataSection = () => {
-        if (!editedData) return (
-            <div className="p-4 text-gray-500">
-                No data available for verification
-            </div>
-        );
+        if (!editedData)
+            return (
+                <div className="p-4 text-gray-500">
+                    No data available for verification
+                </div>
+            );
 
         // Create a document object with the structure expected by table renderers
         const documentForTable = {
@@ -394,39 +449,57 @@ export const DocumentVerificationModal: React.FC<DocumentVerificationModalProps>
             <div className="space-y-6">
                 {/* Document Info - Always show */}
                 <div className="bg-white rounded-xl p-6 border border-gray-200 shadow-sm">
-                        <h4 className="text-lg font-semibold text-gray-900 mb-4">Document Information</h4>
-                        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
-                            <div className="bg-gray-50 rounded-lg p-4">
-                                <div className="text-sm text-gray-600 font-medium mb-1">File Size</div>
-                                <div className="font-semibold text-lg text-gray-900">
-                                    {(document.metadata.file_size / 1024).toFixed(1)} KB
-                                </div>
+                    <h4 className="text-lg font-semibold text-gray-900 mb-4">
+                        Document Information
+                    </h4>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
+                        <div className="bg-gray-50 rounded-lg p-4">
+                            <div className="text-sm text-gray-600 font-medium mb-1">
+                                File Size
                             </div>
-                            <div className="bg-gray-50 rounded-lg p-4">
-                                <div className="text-sm text-gray-600 font-medium mb-1">Document Type</div>
-                                <div className="font-semibold text-lg text-gray-900 truncate">
-                                    {document.metadata.document_type}
-                                </div>
+                            <div className="font-semibold text-lg text-gray-900">
+                                {(document.metadata.file_size / 1024).toFixed(
+                                    1,
+                                )}{' '}
+                                KB
                             </div>
-                            <div className="bg-gray-50 rounded-lg p-4 sm:col-span-2 xl:col-span-1">
-                                <div className="text-sm text-gray-600 font-medium mb-1">Processed</div>
-                                <div className="font-semibold text-base text-gray-900">
-                                    {new Date(document.metadata.processed_at).toLocaleString()}
-                                </div>
+                        </div>
+                        <div className="bg-gray-50 rounded-lg p-4">
+                            <div className="text-sm text-gray-600 font-medium mb-1">
+                                Document Type
+                            </div>
+                            <div className="font-semibold text-lg text-gray-900 truncate">
+                                {document.metadata.document_type}
+                            </div>
+                        </div>
+                        <div className="bg-gray-50 rounded-lg p-4 sm:col-span-2 xl:col-span-1">
+                            <div className="text-sm text-gray-600 font-medium mb-1">
+                                Processed
+                            </div>
+                            <div className="font-semibold text-base text-gray-900">
+                                {new Date(
+                                    document.metadata.processed_at,
+                                ).toLocaleString()}
                             </div>
                         </div>
                     </div>
+                </div>
 
                 {/* Extracted Data Tables */}
                 <div>
                     {/* Debug logging to understand data structure */}
                     {(() => {
-                        console.log('Verification Modal - Document data structure:', {
-                            filename: document.metadata?.filename,
-                            documentType: editedData.document_type,
-                            dataKeys: editedData ? Object.keys(editedData) : 'No data object',
-                            selectedType,
-                        });
+                        console.log(
+                            'Verification Modal - Document data structure:',
+                            {
+                                filename: document.metadata?.filename,
+                                documentType: editedData.document_type,
+                                dataKeys: editedData
+                                    ? Object.keys(editedData)
+                                    : 'No data object',
+                                selectedType,
+                            },
+                        );
                         return null;
                     })()}
 
@@ -434,7 +507,7 @@ export const DocumentVerificationModal: React.FC<DocumentVerificationModalProps>
                     {selectedType === 'Rebut' && <RebutTable {...tableProps} />}
                     {selectedType === 'NPT' && <NPTTable {...tableProps} />}
                     {selectedType === 'Kosu' && <KosuTable {...tableProps} />}
-                    
+
                     {!['Rebut', 'NPT', 'Kosu'].includes(selectedType) && (
                         <div className="p-4 text-gray-500">
                             Preview not available for this document type
@@ -445,38 +518,51 @@ export const DocumentVerificationModal: React.FC<DocumentVerificationModalProps>
                 {/* Edit History - Show if history exists */}
                 {document.history && document.history.length > 0 && (
                     <div className="bg-white rounded-xl p-6 border border-gray-200 shadow-sm">
-                        <h4 className="text-lg font-semibold text-gray-900 mb-4">Edit History</h4>
+                        <h4 className="text-lg font-semibold text-gray-900 mb-4">
+                            Edit History
+                        </h4>
                         <div className="space-y-3 max-h-48 overflow-y-auto">
-                            {document.history.map((entry: any, index: number) => (
-                                <div key={index} className="bg-gray-50 border border-gray-200 rounded-lg p-4">
-                                    <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start mb-2 space-y-1 sm:space-y-0">
-                                        <span className="font-medium text-gray-900 text-sm sm:text-base">
-                                            {entry.field}
-                                        </span>
-                                        <span className="text-xs text-gray-600 font-medium">
-                                            {new Date(entry.updated_at).toLocaleString()}
-                                        </span>
-                                    </div>
-                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 text-sm">
-                                        <div>
-                                            <div className="text-gray-600 mb-1 text-xs sm:text-sm font-medium">
-                                                Old Value:
+                            {document.history.map(
+                                (entry: any, index: number) => (
+                                    <div
+                                        key={index}
+                                        className="bg-gray-50 border border-gray-200 rounded-lg p-4"
+                                    >
+                                        <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start mb-2 space-y-1 sm:space-y-0">
+                                            <span className="font-medium text-gray-900 text-sm sm:text-base">
+                                                {entry.field}
+                                            </span>
+                                            <span className="text-xs text-gray-600 font-medium">
+                                                {new Date(
+                                                    entry.updated_at,
+                                                ).toLocaleString()}
+                                            </span>
+                                        </div>
+                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 text-sm">
+                                            <div>
+                                                <div className="text-gray-600 mb-1 text-xs sm:text-sm font-medium">
+                                                    Old Value:
+                                                </div>
+                                                <div className="bg-red-50 border border-red-200 rounded p-2 text-xs break-all text-gray-800 font-mono">
+                                                    {JSON.stringify(
+                                                        entry.old_value,
+                                                    )}
+                                                </div>
                                             </div>
-                                            <div className="bg-red-50 border border-red-200 rounded p-2 text-xs break-all text-gray-800 font-mono">
-                                                {JSON.stringify(entry.old_value)}
+                                            <div>
+                                                <div className="text-gray-600 mb-1 text-xs sm:text-sm font-medium">
+                                                    New Value:
+                                                </div>
+                                                <div className="bg-green-50 border border-green-200 rounded p-2 text-xs break-all text-gray-800 font-mono">
+                                                    {JSON.stringify(
+                                                        entry.new_value,
+                                                    )}
+                                                </div>
                                             </div>
                                         </div>
-                                        <div>
-                                            <div className="text-gray-600 mb-1 text-xs sm:text-sm font-medium">
-                                                New Value:
-                                            </div>
-                                            <div className="bg-green-50 border border-green-200 rounded p-2 text-xs break-all text-gray-800 font-mono">
-                                                {JSON.stringify(entry.new_value)}
-                                            </div>
-                                        </div>
                                     </div>
-                                </div>
-                            ))}
+                                ),
+                            )}
                         </div>
                     </div>
                 )}
@@ -525,7 +611,9 @@ export const DocumentVerificationModal: React.FC<DocumentVerificationModalProps>
                                 className="flex items-center space-x-2 px-5 py-2.5 bg-amber-500 hover:bg-amber-600 text-white rounded-xl font-medium transition-all duration-200 disabled:opacity-50 shadow-lg hover:shadow-xl"
                             >
                                 <Save className="h-4 w-4" />
-                                <span>{saving ? 'Saving...' : 'Save Draft'}</span>
+                                <span>
+                                    {saving ? 'Saving...' : 'Save Draft'}
+                                </span>
                             </button>
                         )}
                         <button
@@ -555,9 +643,12 @@ export const DocumentVerificationModal: React.FC<DocumentVerificationModalProps>
                                     <Edit2 className="h-4 w-4 text-blue-600" />
                                 </div>
                                 <div>
-                                    <h3 className="text-lg font-bold text-gray-900">Extracted Data</h3>
+                                    <h3 className="text-lg font-bold text-gray-900">
+                                        Extracted Data
+                                    </h3>
                                     <p className="text-sm text-gray-600">
-                                        Click any field to edit the extracted information
+                                        Click any field to edit the extracted
+                                        information
                                     </p>
                                 </div>
                             </div>
@@ -576,8 +667,12 @@ export const DocumentVerificationModal: React.FC<DocumentVerificationModalProps>
                                         <div className="w-4 h-4 bg-emerald-600 rounded"></div>
                                     </div>
                                     <div>
-                                        <h3 className="text-lg font-bold text-gray-900">Original Document</h3>
-                                        <p className="text-sm text-gray-600">Reference image for verification</p>
+                                        <h3 className="text-lg font-bold text-gray-900">
+                                            Original Document
+                                        </h3>
+                                        <p className="text-sm text-gray-600">
+                                            Reference image for verification
+                                        </p>
                                     </div>
                                 </div>
                                 <div className="flex items-center space-x-2">
@@ -622,42 +717,76 @@ export const DocumentVerificationModal: React.FC<DocumentVerificationModalProps>
                                 </div>
                             </div>
                         </div>
-                        <div 
+                        <div
                             className="flex-1 overflow-hidden p-4 bg-gray-100"
-                            onWheel={document.imageUrl ? handleImageWheel : undefined}
+                            onWheel={
+                                document.imageUrl ? handleImageWheel : undefined
+                            }
                             onMouseMove={handleMouseMove}
                             onMouseUp={handleMouseUp}
                             onMouseLeave={handleMouseLeave}
                             style={{
-                                cursor: imageZoom > 100 ? (isDragging ? 'grabbing' : 'grab') : 'default',
+                                cursor:
+                                    imageZoom > 100
+                                        ? isDragging
+                                            ? 'grabbing'
+                                            : 'grab'
+                                        : 'default',
                             }}
                         >
                             {document.imageUrl ? (
                                 <div className="w-full h-full flex items-center justify-center overflow-hidden">
                                     <img
-                                        src={document.imageUrl.startsWith('http') ? document.imageUrl : `${process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8000'}${document.imageUrl}`}
+                                        src={
+                                            document.imageUrl.startsWith('http')
+                                                ? document.imageUrl
+                                                : `${process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8000'}${document.imageUrl}`
+                                        }
                                         alt="Original document"
                                         className="object-contain rounded-lg shadow-lg transition-transform duration-200 ease-out select-none"
                                         style={{
                                             transform: `rotate(${imageRotation}deg) scale(${imageZoom / 100}) translate(${imagePosition.x / (imageZoom / 100)}px, ${imagePosition.y / (imageZoom / 100)}px)`,
-                                            maxWidth: imageZoom > 100 ? 'none' : '100%',
-                                            maxHeight: imageZoom > 100 ? 'none' : '100%',
+                                            maxWidth:
+                                                imageZoom > 100
+                                                    ? 'none'
+                                                    : '100%',
+                                            maxHeight:
+                                                imageZoom > 100
+                                                    ? 'none'
+                                                    : '100%',
                                         }}
                                         onMouseDown={handleMouseDown}
                                         onDragStart={e => e.preventDefault()} // Prevent browser's default drag
-                                        onError={(e) => {
-                                            console.error('Error loading image:', document.imageUrl);
-                                            console.error('Full image URL:', document.imageUrl.startsWith('http') ? document.imageUrl : `${process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8000'}${document.imageUrl}`);
-                                            e.currentTarget.style.display = 'none';
-                                            const errorDiv = e.currentTarget.nextElementSibling as HTMLElement;
-                                            if (errorDiv) errorDiv.classList.remove('hidden');
+                                        onError={e => {
+                                            console.error(
+                                                'Error loading image:',
+                                                document.imageUrl,
+                                            );
+                                            console.error(
+                                                'Full image URL:',
+                                                document.imageUrl.startsWith(
+                                                    'http',
+                                                )
+                                                    ? document.imageUrl
+                                                    : `${process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8000'}${document.imageUrl}`,
+                                            );
+                                            e.currentTarget.style.display =
+                                                'none';
+                                            const errorDiv = e.currentTarget
+                                                .nextElementSibling as HTMLElement;
+                                            if (errorDiv)
+                                                errorDiv.classList.remove(
+                                                    'hidden',
+                                                );
                                         }}
                                     />
                                     <div className="hidden items-center justify-center h-full text-gray-500">
                                         <div className="text-center">
                                             <AlertCircle className="h-12 w-12 mx-auto mb-4" />
                                             <p>Image could not be loaded</p>
-                                            <p className="text-xs text-gray-400 mt-2">URL: {document.imageUrl}</p>
+                                            <p className="text-xs text-gray-400 mt-2">
+                                                URL: {document.imageUrl}
+                                            </p>
                                         </div>
                                     </div>
                                 </div>
@@ -677,24 +806,30 @@ export const DocumentVerificationModal: React.FC<DocumentVerificationModalProps>
                 {showConfirmDialog && (
                     <div className="absolute inset-0 bg-black bg-opacity-50 flex items-center justify-center">
                         <div className="bg-gray rounded-lg p-6 max-w-md w-full mx-4">
-                            <h3 className="text-lg font-semibold mb-4">Confirm Verification</h3>
+                            <h3 className="text-lg font-semibold mb-4">
+                                Confirm Verification
+                            </h3>
                             <p className="text-gray-600 mb-4">
-                                Are you sure you want to mark this document as verified? This action confirms that all data has been reviewed and is accurate.
+                                Are you sure you want to mark this document as
+                                verified? This action confirms that all data has
+                                been reviewed and is accurate.
                             </p>
-                            
+
                             <div className="mb-4">
                                 <label className="block text-sm font-medium text-gray-700 mb-2">
                                     Verification Notes (Optional)
                                 </label>
                                 <textarea
                                     value={verificationNotes}
-                                    onChange={(e) => setVerificationNotes(e.target.value)}
+                                    onChange={e =>
+                                        setVerificationNotes(e.target.value)
+                                    }
                                     className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                                     rows={3}
                                     placeholder="Add any notes about the verification..."
                                 />
                             </div>
-                            
+
                             <div className="flex justify-end space-x-3">
                                 <button
                                     onClick={() => setShowConfirmDialog(false)}
@@ -708,7 +843,9 @@ export const DocumentVerificationModal: React.FC<DocumentVerificationModalProps>
                                     disabled={saving}
                                     className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50"
                                 >
-                                    {saving ? 'Verifying...' : 'Confirm Verification'}
+                                    {saving
+                                        ? 'Verifying...'
+                                        : 'Confirm Verification'}
                                 </button>
                             </div>
                         </div>

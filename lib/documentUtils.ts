@@ -70,7 +70,12 @@ export const updateDocumentVerification = async (
     updates: {
         data?: any;
         metadata?: any;
-        verification_status: 'original' | 'draft' | 'pending_verification' | 'verified' | 'revision_needed';
+        verification_status:
+            | 'original'
+            | 'draft'
+            | 'pending_verification'
+            | 'verified'
+            | 'revision_needed';
         verified_by?: string;
         verified_at?: Date;
         verification_notes?: string;
@@ -106,16 +111,12 @@ export const updateDocumentVerification = async (
     if (updates.verified_by) {
         updateData.verified_by = updates.verified_by;
     }
-    
+
     if (updates.verified_at) {
         updateData.verified_at = updates.verified_at;
     }
 
-    return await Model.findOneAndUpdate(
-        { id },
-        updateData,
-        { new: true },
-    );
+    return await Model.findOneAndUpdate({ id }, updateData, { new: true });
 };
 
 export const getDocuments = async (type: DocumentType, limit?: number) => {

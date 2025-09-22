@@ -101,7 +101,19 @@ export async function PUT(request: NextRequest) {
         await dbConnect();
 
         const body = await request.json();
-        const { id, type, field, oldValue, newValue, verification_status, verified_by, verified_at, verification_notes, data, metadata } = body;
+        const {
+            id,
+            type,
+            field,
+            oldValue,
+            newValue,
+            verification_status,
+            verified_by,
+            verified_at,
+            verification_notes,
+            data,
+            metadata,
+        } = body;
 
         if (!type || !['Rebut', 'NPT', 'Kosu'].includes(type)) {
             return NextResponse.json(
@@ -121,7 +133,11 @@ export async function PUT(request: NextRequest) {
                 metadata,
             };
 
-            const document = await updateDocumentVerification(id, type, updates);
+            const document = await updateDocumentVerification(
+                id,
+                type,
+                updates,
+            );
 
             if (!document) {
                 return NextResponse.json(

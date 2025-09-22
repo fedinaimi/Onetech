@@ -30,34 +30,37 @@ interface TableRendererProps {
 // Helper function to get verification status badge
 const getVerificationStatusBadge = (verificationStatus: string) => {
     const statusConfig = {
-        original: { 
-            color: 'bg-gray-100 text-gray-700 border-gray-200', 
-            icon: AlertCircle, 
-            label: 'Original' 
+        original: {
+            color: 'bg-gray-100 text-gray-700 border-gray-200',
+            icon: AlertCircle,
+            label: 'Original',
         },
-        draft: { 
-            color: 'bg-yellow-100 text-yellow-700 border-yellow-200', 
-            icon: Shield, 
-            label: 'Draft' 
+        draft: {
+            color: 'bg-yellow-100 text-yellow-700 border-yellow-200',
+            icon: Shield,
+            label: 'Draft',
         },
-        pending_verification: { 
-            color: 'bg-blue-100 text-blue-700 border-blue-200', 
-            icon: Shield, 
-            label: 'Pending Review' 
+        pending_verification: {
+            color: 'bg-blue-100 text-blue-700 border-blue-200',
+            icon: Shield,
+            label: 'Pending Review',
         },
-        verified: { 
-            color: 'bg-green-100 text-green-700 border-green-200', 
-            icon: ShieldCheck, 
-            label: 'Verified' 
+        verified: {
+            color: 'bg-green-100 text-green-700 border-green-200',
+            icon: ShieldCheck,
+            label: 'Verified',
         },
-        revision_needed: { 
-            color: 'bg-red-100 text-red-700 border-red-200', 
-            icon: AlertCircle, 
-            label: 'Needs Revision' 
+        revision_needed: {
+            color: 'bg-red-100 text-red-700 border-red-200',
+            icon: AlertCircle,
+            label: 'Needs Revision',
         },
     };
 
-    return statusConfig[verificationStatus as keyof typeof statusConfig] || statusConfig.original;
+    return (
+        statusConfig[verificationStatus as keyof typeof statusConfig] ||
+        statusConfig.original
+    );
 };
 
 // Helper component for editable fields
@@ -126,20 +129,24 @@ const EditableField: React.FC<EditableFieldProps> = ({
         >
             <div className="flex items-center justify-between">
                 <div className="min-h-[24px] flex items-center text-gray-900">
-                    {value !== null && value !== undefined && value !== ''
-                        ? String(value)
-                        : <span className="text-gray-400 italic">Click to add value</span>}
+                    {value !== null && value !== undefined && value !== '' ? (
+                        String(value)
+                    ) : (
+                        <span className="text-gray-400 italic">
+                            Click to add value
+                        </span>
+                    )}
                 </div>
-                <Edit2 
-                    size={14} 
-                    className="text-gray-400 group-hover:text-blue-600 opacity-0 group-hover:opacity-100 transition-all duration-200 ml-2 flex-shrink-0" 
+                <Edit2
+                    size={14}
+                    className="text-gray-400 group-hover:text-blue-600 opacity-0 group-hover:opacity-100 transition-all duration-200 ml-2 flex-shrink-0"
                 />
             </div>
             {/* Subtle indicator for editable fields */}
             <div className="absolute bottom-0 left-3 right-3 h-0.5 bg-blue-200 opacity-0 group-hover:opacity-100 transition-opacity duration-200"></div>
         </div>
     );
-};// Header Card Component
+}; // Header Card Component
 const HeaderCard: React.FC<
     {
         title: string;
@@ -161,9 +168,11 @@ const HeaderCard: React.FC<
     startEdit,
     saveEdit,
 }) => {
-    const statusBadge = getVerificationStatusBadge(doc.verification_status || 'original');
+    const statusBadge = getVerificationStatusBadge(
+        doc.verification_status || 'original',
+    );
     const StatusIcon = statusBadge.icon;
-    
+
     return (
         <div className="bg-white shadow-sm rounded-xl mb-8 border border-gray-200 overflow-hidden">
             <div className="px-6 py-5 bg-gradient-to-r from-indigo-600 via-blue-600 to-cyan-600">
@@ -173,7 +182,9 @@ const HeaderCard: React.FC<
                         {title}
                     </h3>
                     {/* Status Badge */}
-                    <div className={`flex items-center space-x-2 px-3 py-1 border rounded-full bg-white/90 backdrop-blur-sm ${statusBadge.color.replace('bg-', 'border-').replace('100', '300')}`}>
+                    <div
+                        className={`flex items-center space-x-2 px-3 py-1 border rounded-full bg-white/90 backdrop-blur-sm ${statusBadge.color.replace('bg-', 'border-').replace('100', '300')}`}
+                    >
                         <StatusIcon className="h-4 w-4" />
                         <span className="text-sm font-medium">
                             {statusBadge.label}
@@ -266,7 +277,8 @@ export const RebutTable: React.FC<TableRendererProps> = ({
                                 <h3 className="text-xl font-bold text-white flex items-center">
                                     <div className="w-2 h-8 bg-white rounded-full mr-3 opacity-80"></div>
                                     {key.charAt(0).toUpperCase() +
-                                        key.slice(1).replace(/_/g, ' ')} Data
+                                        key.slice(1).replace(/_/g, ' ')}{' '}
+                                    Data
                                 </h3>
                             </div>
                             <div className="overflow-x-auto bg-gray-50">
