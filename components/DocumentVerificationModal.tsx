@@ -5,6 +5,7 @@ import {
     Check,
     Download,
     Edit2,
+    Home,
     RotateCw,
     Save,
     X,
@@ -229,14 +230,45 @@ export const DocumentVerificationModal: React.FC<
         }
     };
 
-    const handleZoomIn = () => setImageZoom(prev => Math.min(prev + 25, 300));
-    const handleZoomOut = () => setImageZoom(prev => Math.max(prev - 25, 50));
+    const handleZoomIn = () => {
+        setImageZoom(prev => {
+            const newZoom = Math.min(prev + 25, 300);
+            // Reset position to center when zooming
+            if (prev <= 100 && newZoom > 100) {
+                setImagePosition({ x: 0, y: 0 });
+            }
+            return newZoom;
+        });
+    };
+
+    const handleZoomOut = () => {
+        setImageZoom(prev => {
+            const newZoom = Math.max(prev - 25, 50);
+            // Reset position to center when returning to 100% or below
+            if (newZoom <= 100) {
+                setImagePosition({ x: 0, y: 0 });
+            }
+            return newZoom;
+        });
+    };
+
     const handleRotate = () => setImageRotation(prev => (prev + 90) % 360);
 
     const handleImageWheel = (e: React.WheelEvent) => {
         e.preventDefault();
         const zoomFactor = e.deltaY > 0 ? 0.9 : 1.1;
-        setImageZoom(prev => Math.max(50, Math.min(300, prev * zoomFactor)));
+        setImageZoom(prev => {
+            const newZoom = Math.max(50, Math.min(300, prev * zoomFactor));
+            // Reset position to center when returning to 100% or below
+            if (newZoom <= 100 && prev > 100) {
+                setImagePosition({ x: 0, y: 0 });
+            }
+            // Reset position to center when first zooming in from 100%
+            if (prev <= 100 && newZoom > 100) {
+                setImagePosition({ x: 0, y: 0 });
+            }
+            return newZoom;
+        });
     };
 
     // Drag handlers for panning
@@ -252,15 +284,31 @@ export const DocumentVerificationModal: React.FC<
 
     const handleMouseMove = (e: React.MouseEvent) => {
         if (isDragging && imageZoom > 100) {
+            const newX = e.clientX - dragStart.x;
+            const newY = e.clientY - dragStart.y;
+
+            // Optional: Add bounds checking to prevent dragging too far
+            // You can uncomment and adjust these limits if needed
+            // const maxOffset = 200; // Maximum pixels to drag
+            // const boundedX = Math.max(-maxOffset, Math.min(maxOffset, newX));
+            // const boundedY = Math.max(-maxOffset, Math.min(maxOffset, newY));
+
             setImagePosition({
-                x: e.clientX - dragStart.x,
-                y: e.clientY - dragStart.y,
+                x: newX,
+                y: newY,
             });
         }
     };
 
     const handleMouseUp = () => setIsDragging(false);
     const handleMouseLeave = () => setIsDragging(false);
+
+    // Function to reset image to center
+    const resetImagePosition = () => {
+        setImagePosition({ x: 0, y: 0 });
+        setImageZoom(100);
+        setImageRotation(0);
+    };
 
     const generateFormattedFilename = (doc: any) => {
         console.log('generateFormattedFilename - Full doc object:', doc);
@@ -682,7 +730,7 @@ export const DocumentVerificationModal: React.FC<
                                         className="p-2 rounded-lg bg-white border border-gray-300 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                                         title="Zoom Out"
                                     >
-                                        <ZoomOut className="h-4 w-4" />
+                                        <ZoomOut className="h-4 w-4 text-black" />
                                     </button>
                                     <span className="text-sm font-medium text-gray-600 min-w-[50px] text-center">
                                         {Math.round(imageZoom)}%
@@ -693,21 +741,28 @@ export const DocumentVerificationModal: React.FC<
                                         className="p-2 rounded-lg bg-white border border-gray-300 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                                         title="Zoom In"
                                     >
-                                        <ZoomIn className="h-4 w-4" />
+                                        <ZoomIn className="h-4 w-4 text-black" />
                                     </button>
                                     <button
                                         onClick={handleRotate}
                                         className="p-2 rounded-lg bg-white border border-gray-300 hover:bg-gray-50 transition-colors"
                                         title="Rotate"
                                     >
-                                        <RotateCw className="h-4 w-4" />
+                                        <RotateCw className="h-4 w-4 text-black" />
                                     </button>
                                     <button
                                         onClick={downloadImage}
                                         className="p-2 rounded-lg bg-white border border-gray-300 hover:bg-gray-50 transition-colors"
                                         title="Download"
                                     >
-                                        <Download className="h-4 w-4" />
+                                        <Download className="h-4 w-4 text-black" />
+                                    </button>
+                                    <button
+                                        onClick={resetImagePosition}
+                                        className="p-2 rounded-lg bg-white border border-gray-300 hover:bg-gray-50 transition-colors"
+                                        title="Reset View"
+                                    >
+                                        <Home className="h-4 w-4 text-black" />
                                     </button>
                                     {imageZoom > 100 && (
                                         <span className="text-xs text-blue-600 bg-blue-50 px-2 py-1 rounded">
@@ -745,7 +800,10 @@ export const DocumentVerificationModal: React.FC<
                                         alt="Original document"
                                         className="object-contain rounded-lg shadow-lg transition-transform duration-200 ease-out select-none"
                                         style={{
-                                            transform: `rotate(${imageRotation}deg) scale(${imageZoom / 100}) translate(${imagePosition.x / (imageZoom / 100)}px, ${imagePosition.y / (imageZoom / 100)}px)`,
+                                            transform:
+                                                imageZoom <= 100
+                                                    ? `rotate(${imageRotation}deg) scale(${imageZoom / 100})`
+                                                    : `rotate(${imageRotation}deg) scale(${imageZoom / 100}) translate(${imagePosition.x}px, ${imagePosition.y}px)`,
                                             maxWidth:
                                                 imageZoom > 100
                                                     ? 'none'
@@ -754,6 +812,7 @@ export const DocumentVerificationModal: React.FC<
                                                 imageZoom > 100
                                                     ? 'none'
                                                     : '100%',
+                                            transformOrigin: 'center center',
                                         }}
                                         onMouseDown={handleMouseDown}
                                         onDragStart={e => e.preventDefault()} // Prevent browser's default drag
