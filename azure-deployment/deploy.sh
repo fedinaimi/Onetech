@@ -59,20 +59,41 @@ NEXTAUTH_SECRET="your-nextauth-secret-here"
 echo -e "${GREEN}Using Backend API URL: $BACKEND_API_URL${NC}"
 echo -e "${GREEN}Using MongoDB URI: ${MONGODB_URI:0:20}...${NC}"
 
+# Generate unique tag with timestamp to force new image pull
+TIMESTAMP=$(date +%Y%m%d%H%M%S)
+IMAGE_TAG="latest-$TIMESTAMP"
+
+echo -e "${YELLOW}🏷️  Using image tag: $IMAGE_TAG${NC}"
+
 # Build with build arguments for AMD64 platform (Azure compatibility)
+# Use --no-cache to ensure fresh build
 docker build \
+  --no-cache \
   --platform linux/amd64 \
   --build-arg MONGODB_URI="$MONGODB_URI" \
   --build-arg NEXT_PUBLIC_API_URL="$BACKEND_API_URL" \
   --build-arg NEXT_PUBLIC_EXTRACT_API="$BACKEND_API_URL/extract/" \
   --build-arg NEXT_PUBLIC_BACKEND_URL="$BACKEND_API_URL" \
+  -t $ACR_LOGIN_SERVER/$IMAGE_NAME:$IMAGE_TAG \
   -t $ACR_LOGIN_SERVER/$IMAGE_NAME:latest .
 
 echo -e "${YELLOW}📤 Pushing Docker image to ACR...${NC}"
 az acr login --name $ACR_NAME
+docker push $ACR_LOGIN_SERVER/$IMAGE_NAME:$IMAGE_TAG
 docker push $ACR_LOGIN_SERVER/$IMAGE_NAME:latest
 
-# Deploy to Azure Container Instances
+# Delete existing container group to force fresh deployment
+echo -e "${YELLOW}🗑️  Removing existing container group...${NC}"
+az container delete \
+  --resource-group $RESOURCE_GROUP \
+  --name $CONTAINER_GROUP \
+  --yes \
+  || echo -e "${YELLOW}⚠️  Container group not found or already deleted${NC}"
+
+# Wait a moment for cleanup
+sleep 10
+
+# Deploy to Azure Container Instances with unique image tag
 echo -e "${YELLOW}🚀 Deploying to Azure Container Instances...${NC}"
 
 az deployment group create \
@@ -80,7 +101,7 @@ az deployment group create \
   --template-file azure-deployment/aci-template.json \
   --parameters \
     containerGroupName=$CONTAINER_GROUP \
-    containerImageName=$ACR_LOGIN_SERVER/$IMAGE_NAME:latest \
+    containerImageName=$ACR_LOGIN_SERVER/$IMAGE_NAME:$IMAGE_TAG \
     registryServer=$ACR_LOGIN_SERVER \
     registryUsername=$ACR_USERNAME \
     registryPassword=$ACR_PASSWORD \

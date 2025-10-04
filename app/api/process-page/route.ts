@@ -11,7 +11,7 @@ export const maxDuration = 300;
 
 const ONETECH_API_URL =
     process.env.NEXT_PUBLIC_EXTRACT_API ||
-    'http://onetech-backend-gdl7h722ruzvs.francecentral.azurecontainer.io:8000/extract/';
+    'http://10.4.101.154:8000/extract/';
 
 // Lazily create a single undici Agent instance to avoid per-request overhead
 function getUndiciAgent(): any | undefined {
