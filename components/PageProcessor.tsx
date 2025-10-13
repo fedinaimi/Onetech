@@ -369,7 +369,7 @@ export default function PageProcessor({
                         <div className="aspect-[3/4] bg-gray-100 rounded-lg mb-3 overflow-hidden relative">
                             <Image
                                 src={page.imageDataUrl}
-                                alt={`Page ${page.pageNumber}`}
+                                alt={`${originalFileName}-Page ${page.pageNumber}`}
                                 fill
                                 className="object-contain"
                                 unoptimized
@@ -380,7 +380,7 @@ export default function PageProcessor({
                         <div className="flex items-center justify-between">
                             <div>
                                 <div className="font-medium text-sm flex items-center space-x-1">
-                                    <span>Page {page.pageNumber}</span>
+                                    <span>{originalFileName}-Page {page.pageNumber}</span>
                                     {page.retryCount && page.retryCount > 0 && (
                                         <span className="text-xs bg-orange-100 text-orange-700 px-1 py-0.5 rounded">
                                             Retry #{page.retryCount}
@@ -417,11 +417,11 @@ export default function PageProcessor({
 
             {/* Page Detail Modal */}
             {selectedPage && (
-                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-                    <div className="bg-white rounded-xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-hidden">
+                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-2">
+                    <div className="bg-white rounded-xl shadow-2xl max-w-[95vw] w-full max-h-[95vh] overflow-hidden">
                         <div className="flex items-center justify-between p-4 border-b">
                             <h3 className="text-lg font-semibold">
-                                Page {selectedPage.pageNumber} Details
+                                {originalFileName}-Page {selectedPage.pageNumber} Details
                             </h3>
                             <button
                                 onClick={() => setSelectedPage(null)}
@@ -431,13 +431,13 @@ export default function PageProcessor({
                             </button>
                         </div>
 
-                        <div className="flex flex-col lg:flex-row max-h-[calc(90vh-120px)]">
+                        <div className="flex flex-col lg:flex-row max-h-[calc(95vh-120px)]">
                             {/* Image Preview */}
                             <div className="lg:w-1/2 p-4 bg-gray-50 relative">
                                 <div className="relative w-full h-96">
                                     <Image
                                         src={selectedPage.imageDataUrl}
-                                        alt={`Page ${selectedPage.pageNumber}`}
+                                        alt={`${originalFileName}-Page ${selectedPage.pageNumber}`}
                                         fill
                                         className="object-contain"
                                         unoptimized

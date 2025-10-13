@@ -18,15 +18,61 @@ export const DocumentDetailsModal: React.FC<DocumentDetailsModalProps> = ({
 }) => {
     const [imageZoom, setImageZoom] = useState(100);
     const [imageRotation, setImageRotation] = useState(0);
+    const [customZoom, setCustomZoom] = useState('100');
+    const [isEditingZoom, setIsEditingZoom] = useState(false);
 
     if (!isOpen || !document) return null;
 
+    // Dynamic zoom increment based on current zoom level
+    const getZoomIncrement = (currentZoom: number) => {
+        if (currentZoom < 100) return 10;
+        if (currentZoom < 200) return 25;
+        return 50;
+    };
+
     const handleZoomIn = () => {
-        setImageZoom(prev => Math.min(prev + 25, 300));
+        setImageZoom(prev => {
+            const increment = getZoomIncrement(prev);
+            const newZoom = Math.min(prev + increment, 500);
+            setCustomZoom(newZoom.toString());
+            return newZoom;
+        });
     };
 
     const handleZoomOut = () => {
-        setImageZoom(prev => Math.max(prev - 25, 50));
+        setImageZoom(prev => {
+            const increment = getZoomIncrement(prev);
+            const newZoom = Math.max(prev - increment, 25);
+            setCustomZoom(newZoom.toString());
+            return newZoom;
+        });
+    };
+
+    const handleCustomZoomChange = (value: string) => {
+        setCustomZoom(value);
+        
+        // Only update zoom if it's a valid number
+        const numValue = parseInt(value);
+        if (!isNaN(numValue) && numValue >= 25 && numValue <= 500) {
+            setImageZoom(numValue);
+        }
+    };
+
+    const handleCustomZoomSubmit = () => {
+        const numValue = parseInt(customZoom);
+        if (!isNaN(numValue)) {
+            const clampedValue = Math.max(25, Math.min(500, numValue));
+            setImageZoom(clampedValue);
+            setCustomZoom(clampedValue.toString());
+        } else {
+            setCustomZoom(imageZoom.toString());
+        }
+        setIsEditingZoom(false);
+    };
+
+    const handleZoomPreset = (preset: number) => {
+        setImageZoom(preset);
+        setCustomZoom(preset.toString());
     };
 
     const handleRotate = () => {
@@ -93,8 +139,8 @@ export const DocumentDetailsModal: React.FC<DocumentDetailsModalProps> = ({
     return (
         <>
             {/* Main Modal - Split View */}
-            <div className="fixed inset-0 z-50 overflow-auto bg-black bg-opacity-50 flex items-start justify-center p-4">
-                <div className="bg-white rounded-lg shadow-xl max-w-7xl w-full max-h-[95vh] overflow-hidden">
+            <div className="fixed inset-0 z-50 overflow-auto bg-black bg-opacity-50 flex items-start justify-center p-2">
+                <div className="bg-white rounded-lg shadow-xl max-w-[98vw] w-full max-h-[98vh] overflow-hidden">
                     {/* Modal Header */}
                     <div className="bg-blue-600 text-white p-4 flex justify-between items-center">
                         <div>
@@ -115,7 +161,7 @@ export const DocumentDetailsModal: React.FC<DocumentDetailsModalProps> = ({
                     </div>
 
                     {/* Split Content Area */}
-                    <div className="flex h-[calc(95vh-80px)]">
+                    <div className="flex h-[calc(98vh-80px)]">
                         {/* Left Side - Image Section */}
                         {document.imageUrl && (
                             <div className="w-1/2 border-r border-gray-200 flex flex-col">
@@ -124,40 +170,77 @@ export const DocumentDetailsModal: React.FC<DocumentDetailsModalProps> = ({
                                     <span className="text-sm font-medium text-gray-700">
                                         Original Document
                                     </span>
-                                    <div className="flex gap-1">
-                                        <button
-                                            onClick={handleZoomOut}
-                                            className="p-1 hover:bg-gray-200 rounded"
-                                            disabled={imageZoom <= 50}
-                                            title="Zoom Out"
-                                        >
-                                            <ZoomOut size={16} />
-                                        </button>
-                                        <span className="px-2 py-1 text-xs bg-white rounded border">
-                                            {imageZoom}%
-                                        </span>
-                                        <button
-                                            onClick={handleZoomIn}
-                                            className="p-1 hover:bg-gray-200 rounded"
-                                            disabled={imageZoom >= 300}
-                                            title="Zoom In"
-                                        >
-                                            <ZoomIn size={16} />
-                                        </button>
-                                        <button
-                                            onClick={handleRotate}
-                                            className="p-1 hover:bg-gray-200 rounded"
-                                            title="Rotate"
-                                        >
-                                            <RotateCw size={16} />
-                                        </button>
-                                        <button
-                                            onClick={downloadImage}
-                                            className="p-1 hover:bg-gray-200 rounded"
-                                            title="Download Image"
-                                        >
-                                            <Download size={16} />
-                                        </button>
+                                    <div className="flex gap-2 items-center">
+                                        {/* Zoom Controls */}
+                                        <div className="flex items-center gap-1">
+                                            <button
+                                                onClick={handleZoomOut}
+                                                className="p-1 hover:bg-gray-200 rounded transition-colors"
+                                                disabled={imageZoom <= 25}
+                                                title={`Zoom Out (-${getZoomIncrement(imageZoom)}%)`}
+                                            >
+                                                <ZoomOut size={16} />
+                                            </button>
+                                            
+                                            {/* Custom Zoom Input */}
+                                            <div className="relative">
+                                                {isEditingZoom ? (
+                                                    <input
+                                                        type="number"
+                                                        value={customZoom}
+                                                        onChange={(e) => handleCustomZoomChange(e.target.value)}
+                                                        onBlur={handleCustomZoomSubmit}
+                                                        onKeyDown={(e) => {
+                                                            if (e.key === 'Enter') {
+                                                                handleCustomZoomSubmit();
+                                                            } else if (e.key === 'Escape') {
+                                                                setCustomZoom(imageZoom.toString());
+                                                                setIsEditingZoom(false);
+                                                            }
+                                                        }}
+                                                        className="w-16 px-2 py-1 text-xs text-center border border-blue-500 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
+                                                        min="25"
+                                                        max="500"
+                                                        autoFocus
+                                                    />
+                                                ) : (
+                                                    <button
+                                                        onClick={() => setIsEditingZoom(true)}
+                                                        className="px-2 py-1 text-xs bg-white rounded border hover:bg-gray-50 transition-colors min-w-[45px]"
+                                                        title="Click to edit zoom level"
+                                                    >
+                                                        {imageZoom}%
+                                                    </button>
+                                                )}
+                                            </div>
+                                            
+                                            <button
+                                                onClick={handleZoomIn}
+                                                className="p-1 hover:bg-gray-200 rounded transition-colors"
+                                                disabled={imageZoom >= 500}
+                                                title={`Zoom In (+${getZoomIncrement(imageZoom)}%)`}
+                                            >
+                                                <ZoomIn size={16} />
+                                            </button>
+                                        </div>
+
+                                        {/* Other Controls */}
+                                        <div className="flex gap-1">
+                                            <button
+                                                onClick={handleRotate}
+                                                className="p-1 hover:bg-gray-200 rounded transition-colors"
+                                                title="Rotate 90°"
+                                            >
+                                                <RotateCw size={16} />
+                                            </button>
+                                            <button
+                                                onClick={downloadImage}
+                                                className="p-1 hover:bg-gray-200 rounded transition-colors"
+                                                title="Download Image"
+                                            >
+                                                <Download size={16} />
+                                            </button>
+                                        </div>
                                     </div>
                                 </div>
 

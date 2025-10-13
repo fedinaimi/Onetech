@@ -42,6 +42,8 @@ export const DocumentVerificationModal: React.FC<
     const [saving, setSaving] = useState(false);
     const [imageZoom, setImageZoom] = useState(100);
     const [imageRotation, setImageRotation] = useState(0);
+    const [customZoom, setCustomZoom] = useState('100');
+    const [isEditingZoom, setIsEditingZoom] = useState(false);
     const [verificationNotes, setVerificationNotes] = useState('');
     const [showConfirmDialog, setShowConfirmDialog] = useState(false);
     const [showVerifiedMessage, setShowVerifiedMessage] = useState(false);
@@ -83,6 +85,8 @@ export const DocumentVerificationModal: React.FC<
             setHasChanges(false);
             setImageZoom(100);
             setImageRotation(0);
+            setCustomZoom('100');
+            setIsEditingZoom(false);
             setImagePosition({ x: 0, y: 0 });
             setVerificationNotes('');
             setShowConfirmDialog(false);
@@ -230,9 +234,18 @@ export const DocumentVerificationModal: React.FC<
         }
     };
 
+    // Dynamic zoom increment based on current zoom level
+    const getZoomIncrement = (currentZoom: number) => {
+        if (currentZoom < 100) return 10;
+        if (currentZoom < 200) return 25;
+        return 50;
+    };
+
     const handleZoomIn = () => {
         setImageZoom(prev => {
-            const newZoom = Math.min(prev + 25, 300);
+            const increment = getZoomIncrement(prev);
+            const newZoom = Math.min(prev + increment, 500);
+            setCustomZoom(newZoom.toString());
             // Reset position to center when zooming
             if (prev <= 100 && newZoom > 100) {
                 setImagePosition({ x: 0, y: 0 });
@@ -243,7 +256,9 @@ export const DocumentVerificationModal: React.FC<
 
     const handleZoomOut = () => {
         setImageZoom(prev => {
-            const newZoom = Math.max(prev - 25, 50);
+            const increment = getZoomIncrement(prev);
+            const newZoom = Math.max(prev - increment, 25);
+            setCustomZoom(newZoom.toString());
             // Reset position to center when returning to 100% or below
             if (newZoom <= 100) {
                 setImagePosition({ x: 0, y: 0 });
@@ -252,13 +267,53 @@ export const DocumentVerificationModal: React.FC<
         });
     };
 
+    const handleCustomZoomChange = (value: string) => {
+        setCustomZoom(value);
+        
+        // Only update zoom if it's a valid number
+        const numValue = parseInt(value);
+        if (!isNaN(numValue) && numValue >= 25 && numValue <= 500) {
+            setImageZoom(numValue);
+            // Reset position when changing zoom
+            if (numValue <= 100) {
+                setImagePosition({ x: 0, y: 0 });
+            }
+        }
+    };
+
+    const handleCustomZoomSubmit = () => {
+        const numValue = parseInt(customZoom);
+        if (!isNaN(numValue)) {
+            const clampedValue = Math.max(25, Math.min(500, numValue));
+            setImageZoom(clampedValue);
+            setCustomZoom(clampedValue.toString());
+            // Reset position when changing zoom
+            if (clampedValue <= 100) {
+                setImagePosition({ x: 0, y: 0 });
+            }
+        } else {
+            setCustomZoom(imageZoom.toString());
+        }
+        setIsEditingZoom(false);
+    };
+
+    const handleZoomPreset = (preset: number) => {
+        setImageZoom(preset);
+        setCustomZoom(preset.toString());
+        // Reset position when changing zoom
+        if (preset <= 100) {
+            setImagePosition({ x: 0, y: 0 });
+        }
+    };
+
     const handleRotate = () => setImageRotation(prev => (prev + 90) % 360);
 
     const handleImageWheel = (e: React.WheelEvent) => {
         e.preventDefault();
         const zoomFactor = e.deltaY > 0 ? 0.9 : 1.1;
         setImageZoom(prev => {
-            const newZoom = Math.max(50, Math.min(300, prev * zoomFactor));
+            const newZoom = Math.max(25, Math.min(500, prev * zoomFactor));
+            setCustomZoom(Math.round(newZoom).toString());
             // Reset position to center when returning to 100% or below
             if (newZoom <= 100 && prev > 100) {
                 setImagePosition({ x: 0, y: 0 });
@@ -619,8 +674,8 @@ export const DocumentVerificationModal: React.FC<
     };
 
     return (
-        <div className="fixed inset-0 bg-gradient-to-br from-black/40 via-black/50 to-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-7xl h-full max-h-[90vh] flex flex-col overflow-hidden border border-gray-200">
+        <div className="fixed inset-0 bg-gradient-to-br from-black/40 via-black/50 to-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-2">
+            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-[98vw] h-full max-h-[98vh] flex flex-col overflow-hidden border border-gray-200">
                 {/* Header */}
                 <div className="flex items-center justify-between px-6 py-5 bg-gradient-to-r from-indigo-600 via-purple-600 to-blue-600 text-white">
                     <div className="flex items-center space-x-4">
@@ -724,54 +779,90 @@ export const DocumentVerificationModal: React.FC<
                                     </div>
                                 </div>
                                 <div className="flex items-center space-x-2">
-                                    <button
-                                        onClick={handleZoomOut}
-                                        disabled={imageZoom <= 50}
-                                        className="p-2 rounded-lg bg-white border border-gray-300 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                                        title="Zoom Out"
-                                    >
-                                        <ZoomOut className="h-4 w-4 text-black" />
-                                    </button>
-                                    <span className="text-sm font-medium text-gray-600 min-w-[50px] text-center">
-                                        {Math.round(imageZoom)}%
-                                    </span>
-                                    <button
-                                        onClick={handleZoomIn}
-                                        disabled={imageZoom >= 300}
-                                        className="p-2 rounded-lg bg-white border border-gray-300 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                                        title="Zoom In"
-                                    >
-                                        <ZoomIn className="h-4 w-4 text-black" />
-                                    </button>
-                                    <button
-                                        onClick={handleRotate}
-                                        className="p-2 rounded-lg bg-white border border-gray-300 hover:bg-gray-50 transition-colors"
-                                        title="Rotate"
-                                    >
-                                        <RotateCw className="h-4 w-4 text-black" />
-                                    </button>
-                                    <button
-                                        onClick={downloadImage}
-                                        className="p-2 rounded-lg bg-white border border-gray-300 hover:bg-gray-50 transition-colors"
-                                        title="Download"
-                                    >
-                                        <Download className="h-4 w-4 text-black" />
-                                    </button>
-                                    <button
-                                        onClick={resetImagePosition}
-                                        className="p-2 rounded-lg bg-white border border-gray-300 hover:bg-gray-50 transition-colors"
-                                        title="Reset View"
-                                    >
-                                        <Home className="h-4 w-4 text-black" />
-                                    </button>
-                                    {imageZoom > 100 && (
-                                        <span className="text-xs text-blue-600 bg-blue-50 px-2 py-1 rounded">
-                                            Drag to pan
-                                        </span>
-                                    )}
+                                    {/* Zoom Controls */}
+                                    <div className="flex items-center space-x-1">
+                                        <button
+                                            onClick={handleZoomOut}
+                                            disabled={imageZoom <= 25}
+                                            className="p-2 rounded-lg bg-white border border-gray-300 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                                            title={`Zoom Out (-${getZoomIncrement(imageZoom)}%)`}
+                                        >
+                                            <ZoomOut className="h-4 w-4 text-black" />
+                                        </button>
+                                        
+                                        {/* Custom Zoom Input */}
+                                        <div className="relative">
+                                            {isEditingZoom ? (
+                                                <input
+                                                    type="number"
+                                                    value={customZoom}
+                                                    onChange={(e) => handleCustomZoomChange(e.target.value)}
+                                                    onBlur={handleCustomZoomSubmit}
+                                                    onKeyDown={(e) => {
+                                                        if (e.key === 'Enter') {
+                                                            handleCustomZoomSubmit();
+                                                        } else if (e.key === 'Escape') {
+                                                            setCustomZoom(imageZoom.toString());
+                                                            setIsEditingZoom(false);
+                                                        }
+                                                    }}
+                                                    className="w-16 px-2 py-1 text-xs text-center border border-blue-500 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
+                                                    min="25"
+                                                    max="500"
+                                                    autoFocus
+                                                />
+                                            ) : (
+                                                <button
+                                                    onClick={() => setIsEditingZoom(true)}
+                                                    className="text-sm font-medium text-gray-600 min-w-[50px] text-center px-2 py-1 bg-white border border-gray-300 rounded hover:bg-gray-50 transition-colors"
+                                                    title="Click to edit zoom level"
+                                                >
+                                                    {Math.round(imageZoom)}%
+                                                </button>
+                                            )}
+                                        </div>
+                                        
+                                        <button
+                                            onClick={handleZoomIn}
+                                            disabled={imageZoom >= 500}
+                                            className="p-2 rounded-lg bg-white border border-gray-300 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                                            title={`Zoom In (+${getZoomIncrement(imageZoom)}%)`}
+                                        >
+                                            <ZoomIn className="h-4 w-4 text-black" />
+                                        </button>
+                                    </div>
+
+                                    {/* Other Controls */}
+                                    <div className="flex items-center space-x-1">
+                                        <button
+                                            onClick={handleRotate}
+                                            className="p-2 rounded-lg bg-white border border-gray-300 hover:bg-gray-50 transition-colors"
+                                            title="Rotate"
+                                        >
+                                            <RotateCw className="h-4 w-4 text-black" />
+                                        </button>
+                                        <button
+                                            onClick={downloadImage}
+                                            className="p-2 rounded-lg bg-white border border-gray-300 hover:bg-gray-50 transition-colors"
+                                            title="Download"
+                                        >
+                                            <Download className="h-4 w-4 text-black" />
+                                        </button>
+                                        <button
+                                            onClick={resetImagePosition}
+                                            className="p-2 rounded-lg bg-white border border-gray-300 hover:bg-gray-50 transition-colors"
+                                            title="Reset View"
+                                        >
+                                            <Home className="h-4 w-4 text-black" />
+                                        </button>
+                                        {imageZoom > 100 && (
+                                            <span className="text-xs text-blue-600 bg-blue-50 px-2 py-1 rounded">
+                                                Drag to pan
+                                            </span>
+                                        )}
+                                    </div>
                                 </div>
                             </div>
-                        </div>
                         <div
                             className="flex-1 overflow-hidden p-4 bg-gray-100"
                             onWheel={
@@ -860,9 +951,10 @@ export const DocumentVerificationModal: React.FC<
                         </div>
                     </div>
                 </div>
+            </div>
 
-                {/* Verification Confirmation Dialog */}
-                {showConfirmDialog && (
+            {/* Verification Confirmation Dialog */}
+            {showConfirmDialog && (
                     <div className="absolute inset-0 bg-black bg-opacity-50 flex items-center justify-center">
                         <div className="bg-gray rounded-lg p-6 max-w-md w-full mx-4">
                             <h3 className="text-lg font-semibold mb-4">

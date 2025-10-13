@@ -79,41 +79,107 @@ const EditableField: React.FC<EditableFieldProps> = ({
     const isEditing =
         editingCell?.doc === docId && editingCell?.field === field;
 
+    // Auto-save functionality with debouncing
+    const [localValue, setLocalValue] = React.useState(editValue);
+    const [isSaving, setIsSaving] = React.useState(false);
+    const [showSaved, setShowSaved] = React.useState(false);
+    const saveTimeoutRef = React.useRef<NodeJS.Timeout | null>(null);
+
+    React.useEffect(() => {
+        setLocalValue(editValue);
+    }, [editValue]);
+
+    const autoSave = React.useCallback(async () => {
+        if (localValue !== editValue) {
+            setIsSaving(true);
+            setEditValue(localValue);
+            await saveEdit();
+            setIsSaving(false);
+            setShowSaved(true);
+            setTimeout(() => setShowSaved(false), 2000);
+        }
+    }, [localValue, editValue, setEditValue, saveEdit]);
+
+    const handleInputChange = (newValue: string) => {
+        setLocalValue(newValue);
+        
+        // Clear existing timeout
+        if (saveTimeoutRef.current) {
+            clearTimeout(saveTimeoutRef.current);
+        }
+        
+        // Set new timeout for auto-save (1 second after user stops typing)
+        saveTimeoutRef.current = setTimeout(() => {
+            setEditValue(newValue);
+            autoSave();
+        }, 1000);
+    };
+
+    React.useEffect(() => {
+        return () => {
+            if (saveTimeoutRef.current) {
+                clearTimeout(saveTimeoutRef.current);
+            }
+        };
+    }, []);
+
     if (isEditing) {
         return (
             <div className="relative bg-white border-2 border-blue-400 rounded-lg p-3 shadow-lg">
-                <div className="flex flex-col space-y-3">
+                <div className="flex flex-col space-y-2">
                     <input
                         type={type}
-                        value={editValue}
-                        onChange={e => setEditValue(e.target.value)}
+                        value={localValue}
+                        onChange={e => handleInputChange(e.target.value)}
                         className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                         autoFocus
                         onKeyDown={e => {
                             if (e.key === 'Enter') {
                                 e.preventDefault();
-                                saveEdit();
+                                if (saveTimeoutRef.current) {
+                                    clearTimeout(saveTimeoutRef.current);
+                                }
+                                autoSave();
+                                setEditingCell(null);
                             } else if (e.key === 'Escape') {
+                                if (saveTimeoutRef.current) {
+                                    clearTimeout(saveTimeoutRef.current);
+                                }
+                                setLocalValue(editValue);
                                 setEditingCell(null);
                             }
                         }}
+                        onBlur={() => {
+                            // Save on blur
+                            if (saveTimeoutRef.current) {
+                                clearTimeout(saveTimeoutRef.current);
+                            }
+                            autoSave();
+                            setTimeout(() => setEditingCell(null), 100);
+                        }}
                         placeholder="Enter value..."
                     />
-                    <div className="flex justify-end space-x-2">
-                        <button
-                            onClick={() => setEditingCell(null)}
-                            className="px-4 py-2 text-sm text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-md transition-colors font-medium"
-                            title="Cancel (Esc)"
-                        >
-                            Cancel
-                        </button>
-                        <button
-                            onClick={saveEdit}
-                            className="px-4 py-2 text-sm text-white bg-blue-600 hover:bg-blue-700 rounded-md transition-colors font-medium shadow-sm"
-                            title="Save (Enter)"
-                        >
-                            Save
-                        </button>
+                    <div className="flex justify-between items-center">
+                        <div className="flex items-center space-x-2 text-xs">
+                            {isSaving && (
+                                <span className="text-blue-600 flex items-center">
+                                    <div className="w-3 h-3 border border-blue-600 border-t-transparent rounded-full animate-spin mr-1"></div>
+                                    Saving...
+                                </span>
+                            )}
+                            {showSaved && (
+                                <span className="text-green-600 flex items-center">
+                                    <div className="w-3 h-3 bg-green-600 rounded-full mr-1"></div>
+                                    Saved
+                                </span>
+                            )}
+                            {!isSaving && !showSaved && (
+                                <span className="text-gray-500">Auto-saves as you type</span>
+                            )}
+                        </div>
+                        <span className="text-xs text-gray-400">
+                            Press Enter to confirm, Esc to cancel
+                        </span>
                     </div>
                 </div>
                 {/* Backdrop to make editing area stand out */}
