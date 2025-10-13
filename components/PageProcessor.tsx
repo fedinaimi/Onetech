@@ -380,7 +380,10 @@ export default function PageProcessor({
                         <div className="flex items-center justify-between">
                             <div>
                                 <div className="font-medium text-sm flex items-center space-x-1">
-                                    <span>{originalFileName}-Page {page.pageNumber}</span>
+                                    <span>
+                                        {originalFileName}-Page{' '}
+                                        {page.pageNumber}
+                                    </span>
                                     {page.retryCount && page.retryCount > 0 && (
                                         <span className="text-xs bg-orange-100 text-orange-700 px-1 py-0.5 rounded">
                                             Retry #{page.retryCount}
@@ -421,7 +424,8 @@ export default function PageProcessor({
                     <div className="bg-white rounded-xl shadow-2xl max-w-[95vw] w-full max-h-[95vh] overflow-hidden">
                         <div className="flex items-center justify-between p-4 border-b">
                             <h3 className="text-lg font-semibold">
-                                {originalFileName}-Page {selectedPage.pageNumber} Details
+                                {originalFileName}-Page{' '}
+                                {selectedPage.pageNumber} Details
                             </h3>
                             <button
                                 onClick={() => setSelectedPage(null)}

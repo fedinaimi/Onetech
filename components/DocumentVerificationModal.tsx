@@ -269,7 +269,7 @@ export const DocumentVerificationModal: React.FC<
 
     const handleCustomZoomChange = (value: string) => {
         setCustomZoom(value);
-        
+
         // Only update zoom if it's a valid number
         const numValue = parseInt(value);
         if (!isNaN(numValue) && numValue >= 25 && numValue <= 500) {
@@ -297,14 +297,14 @@ export const DocumentVerificationModal: React.FC<
         setIsEditingZoom(false);
     };
 
-    const handleZoomPreset = (preset: number) => {
-        setImageZoom(preset);
-        setCustomZoom(preset.toString());
-        // Reset position when changing zoom
-        if (preset <= 100) {
-            setImagePosition({ x: 0, y: 0 });
-        }
-    };
+    // const handleZoomPreset = (preset: number) => {
+    //     setImageZoom(preset);
+    //     setCustomZoom(preset.toString());
+    //     // Reset position when changing zoom
+    //     if (preset <= 100) {
+    //         setImagePosition({ x: 0, y: 0 });
+    //     }
+    // };
 
     const handleRotate = () => setImageRotation(prev => (prev + 90) % 360);
 
@@ -789,21 +789,33 @@ export const DocumentVerificationModal: React.FC<
                                         >
                                             <ZoomOut className="h-4 w-4 text-black" />
                                         </button>
-                                        
+
                                         {/* Custom Zoom Input */}
                                         <div className="relative">
                                             {isEditingZoom ? (
                                                 <input
                                                     type="number"
                                                     value={customZoom}
-                                                    onChange={(e) => handleCustomZoomChange(e.target.value)}
-                                                    onBlur={handleCustomZoomSubmit}
-                                                    onKeyDown={(e) => {
+                                                    onChange={e =>
+                                                        handleCustomZoomChange(
+                                                            e.target.value,
+                                                        )
+                                                    }
+                                                    onBlur={
+                                                        handleCustomZoomSubmit
+                                                    }
+                                                    onKeyDown={e => {
                                                         if (e.key === 'Enter') {
                                                             handleCustomZoomSubmit();
-                                                        } else if (e.key === 'Escape') {
-                                                            setCustomZoom(imageZoom.toString());
-                                                            setIsEditingZoom(false);
+                                                        } else if (
+                                                            e.key === 'Escape'
+                                                        ) {
+                                                            setCustomZoom(
+                                                                imageZoom.toString(),
+                                                            );
+                                                            setIsEditingZoom(
+                                                                false,
+                                                            );
                                                         }
                                                     }}
                                                     className="w-16 px-2 py-1 text-xs text-center border border-blue-500 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
@@ -813,7 +825,9 @@ export const DocumentVerificationModal: React.FC<
                                                 />
                                             ) : (
                                                 <button
-                                                    onClick={() => setIsEditingZoom(true)}
+                                                    onClick={() =>
+                                                        setIsEditingZoom(true)
+                                                    }
                                                     className="text-sm font-medium text-gray-600 min-w-[50px] text-center px-2 py-1 bg-white border border-gray-300 rounded hover:bg-gray-50 transition-colors"
                                                     title="Click to edit zoom level"
                                                 >
@@ -821,7 +835,7 @@ export const DocumentVerificationModal: React.FC<
                                                 </button>
                                             )}
                                         </div>
-                                        
+
                                         <button
                                             onClick={handleZoomIn}
                                             disabled={imageZoom >= 500}
@@ -863,98 +877,105 @@ export const DocumentVerificationModal: React.FC<
                                     </div>
                                 </div>
                             </div>
-                        <div
-                            className="flex-1 overflow-hidden p-4 bg-gray-100"
-                            onWheel={
-                                document.imageUrl ? handleImageWheel : undefined
-                            }
-                            onMouseMove={handleMouseMove}
-                            onMouseUp={handleMouseUp}
-                            onMouseLeave={handleMouseLeave}
-                            style={{
-                                cursor:
-                                    imageZoom > 100
-                                        ? isDragging
-                                            ? 'grabbing'
-                                            : 'grab'
-                                        : 'default',
-                            }}
-                        >
-                            {document.imageUrl ? (
-                                <div className="w-full h-full flex items-center justify-center overflow-hidden">
-                                    <img
-                                        src={
-                                            document.imageUrl.startsWith('http')
-                                                ? document.imageUrl
-                                                : `${process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8000'}${document.imageUrl}`
-                                        }
-                                        alt="Original document"
-                                        className="object-contain rounded-lg shadow-lg transition-transform duration-200 ease-out select-none"
-                                        style={{
-                                            transform:
-                                                imageZoom <= 100
-                                                    ? `rotate(${imageRotation}deg) scale(${imageZoom / 100})`
-                                                    : `rotate(${imageRotation}deg) scale(${imageZoom / 100}) translate(${imagePosition.x}px, ${imagePosition.y}px)`,
-                                            maxWidth:
-                                                imageZoom > 100
-                                                    ? 'none'
-                                                    : '100%',
-                                            maxHeight:
-                                                imageZoom > 100
-                                                    ? 'none'
-                                                    : '100%',
-                                            transformOrigin: 'center center',
-                                        }}
-                                        onMouseDown={handleMouseDown}
-                                        onDragStart={e => e.preventDefault()} // Prevent browser's default drag
-                                        onError={e => {
-                                            console.error(
-                                                'Error loading image:',
-                                                document.imageUrl,
-                                            );
-                                            console.error(
-                                                'Full image URL:',
+                            <div
+                                className="flex-1 overflow-hidden p-4 bg-gray-100"
+                                onWheel={
+                                    document.imageUrl
+                                        ? handleImageWheel
+                                        : undefined
+                                }
+                                onMouseMove={handleMouseMove}
+                                onMouseUp={handleMouseUp}
+                                onMouseLeave={handleMouseLeave}
+                                style={{
+                                    cursor:
+                                        imageZoom > 100
+                                            ? isDragging
+                                                ? 'grabbing'
+                                                : 'grab'
+                                            : 'default',
+                                }}
+                            >
+                                {document.imageUrl ? (
+                                    <div className="w-full h-full flex items-center justify-center overflow-hidden">
+                                        <img
+                                            src={
                                                 document.imageUrl.startsWith(
                                                     'http',
                                                 )
                                                     ? document.imageUrl
-                                                    : `${process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8000'}${document.imageUrl}`,
-                                            );
-                                            e.currentTarget.style.display =
-                                                'none';
-                                            const errorDiv = e.currentTarget
-                                                .nextElementSibling as HTMLElement;
-                                            if (errorDiv)
-                                                errorDiv.classList.remove(
-                                                    'hidden',
+                                                    : `${process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8000'}${document.imageUrl}`
+                                            }
+                                            alt="Original document"
+                                            className="object-contain rounded-lg shadow-lg transition-transform duration-200 ease-out select-none"
+                                            style={{
+                                                transform:
+                                                    imageZoom <= 100
+                                                        ? `rotate(${imageRotation}deg) scale(${imageZoom / 100})`
+                                                        : `rotate(${imageRotation}deg) scale(${imageZoom / 100}) translate(${imagePosition.x}px, ${imagePosition.y}px)`,
+                                                maxWidth:
+                                                    imageZoom > 100
+                                                        ? 'none'
+                                                        : '100%',
+                                                maxHeight:
+                                                    imageZoom > 100
+                                                        ? 'none'
+                                                        : '100%',
+                                                transformOrigin:
+                                                    'center center',
+                                            }}
+                                            onMouseDown={handleMouseDown}
+                                            onDragStart={e =>
+                                                e.preventDefault()
+                                            } // Prevent browser's default drag
+                                            onError={e => {
+                                                console.error(
+                                                    'Error loading image:',
+                                                    document.imageUrl,
                                                 );
-                                        }}
-                                    />
-                                    <div className="hidden items-center justify-center h-full text-gray-500">
-                                        <div className="text-center">
-                                            <AlertCircle className="h-12 w-12 mx-auto mb-4" />
-                                            <p>Image could not be loaded</p>
-                                            <p className="text-xs text-gray-400 mt-2">
-                                                URL: {document.imageUrl}
-                                            </p>
+                                                console.error(
+                                                    'Full image URL:',
+                                                    document.imageUrl.startsWith(
+                                                        'http',
+                                                    )
+                                                        ? document.imageUrl
+                                                        : `${process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8000'}${document.imageUrl}`,
+                                                );
+                                                e.currentTarget.style.display =
+                                                    'none';
+                                                const errorDiv = e.currentTarget
+                                                    .nextElementSibling as HTMLElement;
+                                                if (errorDiv)
+                                                    errorDiv.classList.remove(
+                                                        'hidden',
+                                                    );
+                                            }}
+                                        />
+                                        <div className="hidden items-center justify-center h-full text-gray-500">
+                                            <div className="text-center">
+                                                <AlertCircle className="h-12 w-12 mx-auto mb-4" />
+                                                <p>Image could not be loaded</p>
+                                                <p className="text-xs text-gray-400 mt-2">
+                                                    URL: {document.imageUrl}
+                                                </p>
+                                            </div>
                                         </div>
                                     </div>
-                                </div>
-                            ) : (
-                                <div className="flex items-center justify-center h-full text-gray-500">
-                                    <div className="text-center">
-                                        <AlertCircle className="h-12 w-12 mx-auto mb-4" />
-                                        <p>No image available</p>
+                                ) : (
+                                    <div className="flex items-center justify-center h-full text-gray-500">
+                                        <div className="text-center">
+                                            <AlertCircle className="h-12 w-12 mx-auto mb-4" />
+                                            <p>No image available</p>
+                                        </div>
                                     </div>
-                                </div>
-                            )}
+                                )}
+                            </div>
                         </div>
                     </div>
                 </div>
-            </div>
 
-            {/* Verification Confirmation Dialog */}
-            {showConfirmDialog && (
+                {/* Verification Confirmation Dialog */}
+                {showConfirmDialog && (
                     <div className="absolute inset-0 bg-black bg-opacity-50 flex items-center justify-center">
                         <div className="bg-gray rounded-lg p-6 max-w-md w-full mx-4">
                             <h3 className="text-lg font-semibold mb-4">

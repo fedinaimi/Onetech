@@ -102,12 +102,12 @@ const EditableField: React.FC<EditableFieldProps> = ({
 
     const handleInputChange = (newValue: string) => {
         setLocalValue(newValue);
-        
+
         // Clear existing timeout
         if (saveTimeoutRef.current) {
             clearTimeout(saveTimeoutRef.current);
         }
-        
+
         // Set new timeout for auto-save (1 second after user stops typing)
         saveTimeoutRef.current = setTimeout(() => {
             setEditValue(newValue);
@@ -174,7 +174,9 @@ const EditableField: React.FC<EditableFieldProps> = ({
                                 </span>
                             )}
                             {!isSaving && !showSaved && (
-                                <span className="text-gray-500">Auto-saves as you type</span>
+                                <span className="text-gray-500">
+                                    Auto-saves as you type
+                                </span>
                             )}
                         </div>
                         <span className="text-xs text-gray-400">

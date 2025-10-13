@@ -50,7 +50,7 @@ export const DocumentDetailsModal: React.FC<DocumentDetailsModalProps> = ({
 
     const handleCustomZoomChange = (value: string) => {
         setCustomZoom(value);
-        
+
         // Only update zoom if it's a valid number
         const numValue = parseInt(value);
         if (!isNaN(numValue) && numValue >= 25 && numValue <= 500) {
@@ -70,10 +70,10 @@ export const DocumentDetailsModal: React.FC<DocumentDetailsModalProps> = ({
         setIsEditingZoom(false);
     };
 
-    const handleZoomPreset = (preset: number) => {
-        setImageZoom(preset);
-        setCustomZoom(preset.toString());
-    };
+    // const handleZoomPreset = (preset: number) => {
+    //     setImageZoom(preset);
+    //     setCustomZoom(preset.toString());
+    // };
 
     const handleRotate = () => {
         setImageRotation(prev => (prev + 90) % 360);
@@ -181,21 +181,37 @@ export const DocumentDetailsModal: React.FC<DocumentDetailsModalProps> = ({
                                             >
                                                 <ZoomOut size={16} />
                                             </button>
-                                            
+
                                             {/* Custom Zoom Input */}
                                             <div className="relative">
                                                 {isEditingZoom ? (
                                                     <input
                                                         type="number"
                                                         value={customZoom}
-                                                        onChange={(e) => handleCustomZoomChange(e.target.value)}
-                                                        onBlur={handleCustomZoomSubmit}
-                                                        onKeyDown={(e) => {
-                                                            if (e.key === 'Enter') {
+                                                        onChange={e =>
+                                                            handleCustomZoomChange(
+                                                                e.target.value,
+                                                            )
+                                                        }
+                                                        onBlur={
+                                                            handleCustomZoomSubmit
+                                                        }
+                                                        onKeyDown={e => {
+                                                            if (
+                                                                e.key ===
+                                                                'Enter'
+                                                            ) {
                                                                 handleCustomZoomSubmit();
-                                                            } else if (e.key === 'Escape') {
-                                                                setCustomZoom(imageZoom.toString());
-                                                                setIsEditingZoom(false);
+                                                            } else if (
+                                                                e.key ===
+                                                                'Escape'
+                                                            ) {
+                                                                setCustomZoom(
+                                                                    imageZoom.toString(),
+                                                                );
+                                                                setIsEditingZoom(
+                                                                    false,
+                                                                );
                                                             }
                                                         }}
                                                         className="w-16 px-2 py-1 text-xs text-center border border-blue-500 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
@@ -205,7 +221,11 @@ export const DocumentDetailsModal: React.FC<DocumentDetailsModalProps> = ({
                                                     />
                                                 ) : (
                                                     <button
-                                                        onClick={() => setIsEditingZoom(true)}
+                                                        onClick={() =>
+                                                            setIsEditingZoom(
+                                                                true,
+                                                            )
+                                                        }
                                                         className="px-2 py-1 text-xs bg-white rounded border hover:bg-gray-50 transition-colors min-w-[45px]"
                                                         title="Click to edit zoom level"
                                                     >
@@ -213,7 +233,7 @@ export const DocumentDetailsModal: React.FC<DocumentDetailsModalProps> = ({
                                                     </button>
                                                 )}
                                             </div>
-                                            
+
                                             <button
                                                 onClick={handleZoomIn}
                                                 className="p-1 hover:bg-gray-200 rounded transition-colors"

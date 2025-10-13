@@ -23,15 +23,19 @@ export default function DetailPage({ params }: DetailPageProps) {
             try {
                 setLoading(true);
                 const response = await fetch(`/api/documents/${params.id}`);
-                
+
                 if (!response.ok) {
                     throw new Error('Document not found');
                 }
-                
+
                 const doc = await response.json();
                 setDocument(doc);
             } catch (err) {
-                setError(err instanceof Error ? err.message : 'Failed to load document');
+                setError(
+                    err instanceof Error
+                        ? err.message
+                        : 'Failed to load document',
+                );
             } finally {
                 setLoading(false);
             }
@@ -58,8 +62,12 @@ export default function DetailPage({ params }: DetailPageProps) {
             <div className="min-h-screen bg-gray-50 flex items-center justify-center">
                 <div className="text-center max-w-md mx-auto px-4">
                     <div className="text-red-500 text-6xl mb-4">⚠️</div>
-                    <h1 className="text-2xl font-bold text-gray-900 mb-2">Document Not Found</h1>
-                    <p className="text-gray-600 mb-6">{error || 'The requested document could not be found.'}</p>
+                    <h1 className="text-2xl font-bold text-gray-900 mb-2">
+                        Document Not Found
+                    </h1>
+                    <p className="text-gray-600 mb-6">
+                        {error || 'The requested document could not be found.'}
+                    </p>
                     <button
                         onClick={() => router.push('/')}
                         className="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
@@ -90,10 +98,12 @@ export default function DetailPage({ params }: DetailPageProps) {
                                 Document Details
                             </h1>
                             <p className="text-sm text-gray-500">
-                                {document.metadata.filename} | {document.metadata.document_type}
+                                {document.metadata.filename} |{' '}
+                                {document.metadata.document_type}
                             </p>
                         </div>
-                        <div className="w-24"></div> {/* Spacer for centering */}
+                        <div className="w-24"></div>{' '}
+                        {/* Spacer for centering */}
                     </div>
                 </div>
             </div>
