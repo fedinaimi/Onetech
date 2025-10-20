@@ -6,8 +6,8 @@ import { NextRequest, NextResponse } from 'next/server';
 // Using `any` typing to avoid a hard type dependency on undici in TS build
 let undiciAgent: any | undefined;
 
-// Allow this API route to run for up to 5 minutes
-export const maxDuration = 300;
+// For client server - no timeout restrictions (remove Vercel limits)
+// export const maxDuration = 300; // Not needed for self-hosted
 
 const ONETECH_API_URL =
     process.env.NEXT_PUBLIC_EXTRACT_API || 'http://10.4.101.154:8000/extract/';
@@ -186,12 +186,13 @@ async function processPageWithExternalAPI(
 
         console.log(`Page ${pageNumber} - Making single API call`);
 
-        // Single attempt with a 5-minute timeout (matches route maxDuration)
+        // Optimized timeout for client server with retry logic
         try {
             const fetchOptions: RequestInit & { dispatcher?: any } = {
                 method: 'POST',
                 body: apiFormData,
-                signal: AbortSignal.timeout(300000),
+                signal: AbortSignal.timeout(180000), // Reduced to 3 minutes for faster feedback
+                // Let Node.js handle connection management automatically
             };
 
             // Use undici dispatcher if available
@@ -200,22 +201,57 @@ async function processPageWithExternalAPI(
                 fetchOptions.dispatcher = agent;
             }
 
-            response = await fetch(ONETECH_API_URL, fetchOptions);
-        } catch (fetchError: any) {
-            console.error(`Page ${pageNumber} - API call failed:`, fetchError);
-            let errorMessage = 'Failed to connect to external API';
-            if (fetchError?.name === 'AbortError') {
-                errorMessage = 'Request timeout (5 minutes)';
-            } else if (
-                fetchError?.code === 'UND_ERR_HEADERS_TIMEOUT' ||
-                fetchError?.cause?.code === 'UND_ERR_HEADERS_TIMEOUT'
-            ) {
-                errorMessage =
-                    'Headers timeout - external API may be overloaded';
+            // Retry logic for better reliability
+            let retries = 2;
+            let lastError;
+            
+            for (let attempt = 1; attempt <= retries + 1; attempt++) {
+                try {
+                    console.log(`Page ${pageNumber} - Attempt ${attempt}/${retries + 1}`);
+                    response = await fetch(ONETECH_API_URL, fetchOptions);
+                    break; // Success, exit retry loop
+                } catch (fetchError: any) {
+                    lastError = fetchError;
+                    console.error(`Page ${pageNumber} - Attempt ${attempt} failed:`, fetchError);
+                    
+                    // Don't retry on timeout (AbortError)
+                    if (fetchError?.name === 'AbortError') {
+                        break;
+                    }
+                    
+                    // Wait before retry (exponential backoff)
+                    if (attempt <= retries) {
+                        const delay = Math.min(1000 * Math.pow(2, attempt - 1), 5000); // Max 5s delay
+                        console.log(`Page ${pageNumber} - Retrying in ${delay}ms...`);
+                        await new Promise(resolve => setTimeout(resolve, delay));
+                    }
+                }
             }
+            
+            if (!response) {
+                let errorMessage = 'Failed to connect to external API after retries';
+                if (lastError?.name === 'AbortError') {
+                    errorMessage = 'Request timeout (3 minutes)';
+                } else if (
+                    lastError?.code === 'UND_ERR_HEADERS_TIMEOUT' ||
+                    lastError?.cause?.code === 'UND_ERR_HEADERS_TIMEOUT'
+                ) {
+                    errorMessage = 'Headers timeout - external API may be overloaded';
+                } else if (lastError?.code === 'ECONNREFUSED') {
+                    errorMessage = 'Connection refused - backend may be down';
+                } else if (lastError?.code === 'ECONNRESET') {
+                    errorMessage = 'Connection reset - network issue or backend overload';
+                }
+                return {
+                    success: false,
+                    error: `${errorMessage}: ${lastError?.message || String(lastError)}`,
+                };
+            }
+        } catch (fetchError: any) {
+            console.error(`Page ${pageNumber} - Unexpected error:`, fetchError);
             return {
                 success: false,
-                error: `${errorMessage}: ${fetchError?.message || String(fetchError)}`,
+                error: `Unexpected error: ${fetchError?.message || String(fetchError)}`,
             };
         }
 

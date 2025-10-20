@@ -12,6 +12,17 @@ import React, { useCallback, useRef, useState } from 'react';
 
 type DocumentType = 'Rebut' | 'NPT' | 'Kosu';
 
+// Custom hook to check if we're on the client side
+const useIsClient = () => {
+    const [isClient, setIsClient] = React.useState(false);
+    
+    React.useEffect(() => {
+        setIsClient(true);
+    }, []);
+    
+    return isClient;
+};
+
 interface PageData {
     pageNumber: number;
     fileName: string;
@@ -79,11 +90,10 @@ interface Document {
 }
 
 export default function HomePage() {
+    const isClient = useIsClient();
     const [selectedType, setSelectedType] = useState<DocumentType>('Rebut');
-    const [documents, setDocuments] = useState<Document[]>([]);
-    const [documentCounts, setDocumentCounts] = useState<
-        Record<DocumentType, number>
-    >({
+    const [documents, setDocuments] = useState<any[]>([]);
+    const [documentCounts, setDocumentCounts] = useState({
         Rebut: 0,
         NPT: 0,
         Kosu: 0,
@@ -115,6 +125,31 @@ export default function HomePage() {
     const [isUploading, setIsUploading] = useState(false);
     const fileInputRef = useRef<HTMLInputElement>(null);
 
+    // Utility function to check localStorage usage
+    const checkStorageUsage = useCallback(() => {
+        try {
+            let totalSize = 0;
+            for (let key in localStorage) {
+                if (localStorage.hasOwnProperty(key)) {
+                    totalSize += localStorage[key].length;
+                }
+            }
+            const usageKB = Math.round(totalSize / 1024);
+            const usageMB = (usageKB / 1024).toFixed(2);
+            
+            if (usageKB > 3000) { // Warn if over 3MB
+                console.warn(`⚠️ localStorage usage: ${usageKB}KB (${usageMB}MB) - approaching quota limit`);
+            } else {
+                console.log(`💾 localStorage usage: ${usageKB}KB (${usageMB}MB)`);
+            }
+            
+            return { totalKB: usageKB, totalMB: parseFloat(usageMB) };
+        } catch (error) {
+            console.error('Error checking storage usage:', error);
+            return { totalKB: 0, totalMB: 0 };
+        }
+    }, []);
+
     // Load persisted processing state on mount
     const loadPersistedProcessingState = useCallback(() => {
         try {
@@ -128,39 +163,168 @@ export default function HomePage() {
 
                 // Only restore if there are incomplete pages and it matches current document type
                 const incompletePages = pages.filter(
-                    (p: PageData) => p.status !== 'completed',
+                    (p: any) => p.status !== 'completed',
                 );
                 if (incompletePages.length > 0 && savedType === selectedType) {
                     console.log(
-                        `Restoring processing state: ${incompletePages.length} incomplete pages`,
+                        `📦 Restoring processing state: ${incompletePages.length} incomplete pages (image data will be regenerated)`,
                     );
-                    setProcessingPages(pages);
+                    
+                    // Convert lightweight format back to full PageData format
+                    const restoredPages: PageData[] = pages.map((p: any) => ({
+                        pageNumber: p.pageNumber,
+                        fileName: p.fileName,
+                        mimeType: p.mimeType,
+                        imageDataUrl: '', // Will be empty - needs to be regenerated
+                        bufferSize: p.bufferSize,
+                        status: p.status,
+                        extractedData: p.extractedData,
+                        error: p.error,
+                    }));
+                    
+                    setProcessingPages(restoredPages);
                     setIsProcessingPDF(isProcessing);
+                    
+                    // Auto-resume processing if there are pending/error pages
+                    const pendingPages = restoredPages.filter(p => p.status === 'pending' || p.status === 'error');
+                    if (pendingPages.length > 0 && !isProcessing) {
+                        console.log(`🔄 Auto-resuming processing for ${pendingPages.length} pending pages`);
+                        setTimeout(() => {
+                            setIsProcessingPDF(true);
+                            // The PageProcessor component will handle the actual processing
+                        }, 1000);
+                    }
                 } else {
                     // Clear completed or mismatched processing state
                     localStorage.removeItem('processing-state');
                 }
             }
+
+            // Also check for minimal fallback state
+            const minimalState = localStorage.getItem('processing-state-minimal');
+            if (minimalState && !savedState) {
+                const { pageCount, isProcessing, documentType: savedType, originalFileName } = JSON.parse(minimalState);
+                if (savedType === selectedType && isProcessing) {
+                    console.log(`📦 Found minimal processing state for ${pageCount} pages - will need to restart PDF splitting`);
+                    // Note: Don't auto-restore minimal state as it lacks page data
+                    localStorage.removeItem('processing-state-minimal');
+                }
+            }
         } catch (error) {
             console.error('Error loading persisted processing state:', error);
             localStorage.removeItem('processing-state');
+            localStorage.removeItem('processing-state-minimal');
         }
     }, [selectedType]);
 
-    // Save processing state to localStorage
+    // Enhanced session storage for PDF data persistence
+    const savePDFSession = useCallback(
+        (file: File, pages: PageData[], documentType: string) => {
+            try {
+                // Check if we're in the browser (client-side)
+                if (typeof window === 'undefined') {
+                    return;
+                }
+                
+                // Save PDF file info for resume capability
+                const sessionData = {
+                    originalFileName: file.name,
+                    fileSize: file.size,
+                    fileType: file.type,
+                    documentType,
+                    pageCount: pages.length,
+                    timestamp: Date.now(),
+                    sessionId: `pdf_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+                };
+                
+                sessionStorage.setItem('pdf-session', JSON.stringify(sessionData));
+                console.log(`💾 Saved PDF session: ${file.name} (${pages.length} pages)`);
+            } catch (error) {
+                console.error('Error saving PDF session:', error);
+            }
+        },
+        []
+    );
+
+    // Load PDF session on reload
+    const loadPDFSession = useCallback(() => {
+        try {
+            // Check if we're in the browser (client-side)
+            if (typeof window === 'undefined') {
+                return null;
+            }
+            
+            const sessionData = sessionStorage.getItem('pdf-session');
+            if (sessionData) {
+                const parsed = JSON.parse(sessionData);
+                console.log(`📦 Found PDF session: ${parsed.originalFileName} (${parsed.pageCount} pages)`);
+                return parsed;
+            }
+        } catch (error) {
+            console.error('Error loading PDF session:', error);
+            if (typeof window !== 'undefined') {
+                sessionStorage.removeItem('pdf-session');
+            }
+        }
+        return null;
+    }, []);
+
+    // Save processing state to localStorage (without heavy image data)
     const saveProcessingState = useCallback(
         (pages: PageData[], isProcessing: boolean, fileName: string) => {
             try {
+                // Create lightweight version without base64 image data
+                const lightweightPages = pages.map(page => ({
+                    pageNumber: page.pageNumber,
+                    fileName: page.fileName,
+                    mimeType: page.mimeType,
+                    bufferSize: page.bufferSize,
+                    status: page.status,
+                    extractedData: page.extractedData,
+                    error: page.error,
+                    // Exclude imageDataUrl to save space
+                    hasImageData: !!page.imageDataUrl,
+                }));
+
                 const state = {
-                    pages,
+                    pages: lightweightPages,
                     isProcessing,
                     documentType: selectedType,
                     originalFileName: fileName,
                     timestamp: Date.now(),
                 };
-                localStorage.setItem('processing-state', JSON.stringify(state));
+
+                // Calculate approximate size before storing
+                const stateString = JSON.stringify(state);
+                const sizeKB = Math.round(stateString.length / 1024);
+                
+                if (sizeKB > 4000) { // If larger than 4MB, don't store
+                    console.warn(`⚠️ Processing state too large (${sizeKB}KB) - skipping localStorage save`);
+                    return;
+                }
+
+                localStorage.setItem('processing-state', stateString);
+                console.log(`💾 Saved processing state (${sizeKB}KB) for ${lightweightPages.length} pages`);
+                
+                // Check total storage usage after saving
+                setTimeout(() => checkStorageUsage(), 100);
             } catch (error) {
                 console.error('Error saving processing state:', error);
+                // Fallback: try to clear old data and save minimal state
+                try {
+                    localStorage.removeItem('processing-state');
+                    const minimalState = {
+                        pageCount: pages.length,
+                        isProcessing,
+                        documentType: selectedType,
+                        originalFileName: fileName,
+                        timestamp: Date.now(),
+                    };
+                    localStorage.setItem('processing-state-minimal', JSON.stringify(minimalState));
+                    console.log('💾 Saved minimal processing state as fallback');
+                } catch (fallbackError) {
+                    console.error('Failed to save even minimal state:', fallbackError);
+                }
             }
         },
         [selectedType],
@@ -328,6 +492,27 @@ export default function HomePage() {
             saveImageProcessingState(processingImage, isProcessingImage);
         }
     }, [processingImage, isProcessingImage, saveImageProcessingState]);
+
+    // Session recovery on mount
+    React.useEffect(() => {
+        // Only run on client-side after initial mount
+        if (typeof window === 'undefined') return;
+        
+        const timer = setTimeout(() => {
+            try {
+                loadPersistedProcessingState();
+                const pdfSession = loadPDFSession();
+                
+                if (pdfSession) {
+                    console.log(`🔍 Checking for recoverable PDF session: ${pdfSession.originalFileName}`);
+                }
+            } catch (error) {
+                console.error('Error during session recovery:', error);
+            }
+        }, 100); // Small delay to ensure component is fully mounted
+
+        return () => clearTimeout(timer);
+    }, []); // Empty dependency array - only run once on mount
 
     const handleImageUpload = useCallback(
         async (file: File) => {
@@ -545,7 +730,8 @@ export default function HomePage() {
                     console.log(`PDF split into ${pages.length} pages`);
                     setProcessingPages(pages);
 
-                    // Save initial processing state to localStorage
+                    // Save PDF session and processing state
+                    savePDFSession(file, pages, selectedType);
                     saveProcessingState(pages, true, file.name);
                 } else {
                     throw new Error(
@@ -967,6 +1153,63 @@ export default function HomePage() {
     return (
         <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100">
             <HeaderBar />
+
+            {/* Session Recovery Banner */}
+            {isClient && (() => {
+                const pdfSession = loadPDFSession();
+                const hasUnfinishedProcessing = processingPages.some(p => p.status === 'pending' || p.status === 'error');
+                
+                if (pdfSession && hasUnfinishedProcessing && !isProcessingPDF) {
+                    return (
+                        <div className="max-w-7xl mx-auto px-3 sm:px-4 md:px-6 lg:px-8 py-2">
+                            <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 mb-4">
+                                <div className="flex items-center justify-between">
+                                    <div className="flex items-center space-x-3">
+                                        <div className="flex-shrink-0">
+                                            <svg className="h-5 w-5 text-amber-600" fill="currentColor" viewBox="0 0 20 20">
+                                                <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                                            </svg>
+                                        </div>
+                                        <div>
+                                            <h3 className="text-sm font-medium text-amber-800">
+                                                Resume Processing Session
+                                            </h3>
+                                            <p className="text-sm text-amber-700">
+                                                Found unfinished processing for "{pdfSession.originalFileName}" ({pdfSession.pageCount} pages)
+                                            </p>
+                                        </div>
+                                    </div>
+                                    <div className="flex space-x-2">
+                                        <button
+                                            onClick={() => {
+                                                setIsProcessingPDF(true);
+                                                console.log('🔄 Resuming processing session...');
+                                            }}
+                                            className="bg-amber-600 hover:bg-amber-700 text-white text-sm px-3 py-1 rounded transition-colors"
+                                        >
+                                            Resume Processing
+                                        </button>
+                                        <button
+                                            onClick={() => {
+                                                if (typeof window !== 'undefined') {
+                                                    sessionStorage.removeItem('pdf-session');
+                                                    localStorage.removeItem('processing-state');
+                                                }
+                                                setProcessingPages([]);
+                                                console.log('🗑️ Cleared processing session');
+                                            }}
+                                            className="bg-gray-500 hover:bg-gray-600 text-white text-sm px-3 py-1 rounded transition-colors"
+                                        >
+                                            Clear Session
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    );
+                }
+                return null;
+            })()}
 
             <div className="max-w-7xl mx-auto px-3 sm:px-4 md:px-6 lg:px-8 py-3 sm:py-4 md:py-6 lg:py-8">
                 {/* Title */}

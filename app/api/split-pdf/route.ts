@@ -26,6 +26,12 @@ export async function POST(request: NextRequest) {
             type: file.type,
         });
 
+        // Check file size and warn for large files
+        const fileSizeMB = file.size / (1024 * 1024);
+        if (fileSizeMB > 25) {
+            console.warn(`⚠️ Large file detected: ${fileSizeMB.toFixed(2)}MB - expect longer processing time`);
+        }
+
         console.log('Backend URL:', BACKEND_URL);
 
         // Create FormData to send to backend
@@ -34,10 +40,13 @@ export async function POST(request: NextRequest) {
 
         console.log('Calling backend split-pdf endpoint...');
 
-        // Call the backend PDF split endpoint
+        // Call the backend PDF split endpoint with extended timeout for large files
+        const timeoutMs = fileSizeMB > 25 ? 180000 : 120000; // 3min for large files, 2min for normal
+        
         const backendResponse = await fetch(`${BACKEND_URL}/split-pdf/`, {
             method: 'POST',
             body: backendFormData,
+            signal: AbortSignal.timeout(timeoutMs),
         });
 
         console.log('Backend response status:', backendResponse.status);

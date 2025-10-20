@@ -8,8 +8,8 @@ import {
 } from '@/lib/pdfUtils';
 import { NextRequest, NextResponse } from 'next/server';
 
-// Allow this API route to run for up to 5 minutes
-export const maxDuration = 300;
+// For client server - no timeout restrictions (remove Vercel limits)
+// export const maxDuration = 300; // Not needed for self-hosted
 
 const ONETECH_API_URL =
     process.env.NEXT_PUBLIC_EXTRACT_API ||

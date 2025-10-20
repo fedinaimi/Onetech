@@ -41,8 +41,9 @@ export default function PageProcessor({
     const [processingPages, setProcessingPages] = useState<PageData[]>(pages);
     const [selectedPage, setSelectedPage] = useState<PageData | null>(null);
     useState<string>('');
-    const [startTime, setStartTime] = useState<number>(Date.now());
-    const processingStarted = useRef(false); // Track if processing has started
+    const [startTime, setStartTime] = useState<number>(0);
+    const processingStarted = useRef(false);
+    const [concurrentProcessing, setConcurrentProcessing] = useState(0); // Track if processing has started
 
     const processPage = useCallback(
         async (page: PageData) => {
@@ -61,7 +62,10 @@ export default function PageProcessor({
                 return;
             }
 
-            console.log(`Starting to process page ${page.pageNumber}`);
+            console.log(`🔄 Starting to process page ${page.pageNumber}`);
+
+            // Track concurrent processing
+            setConcurrentProcessing(prev => prev + 1);
 
             // Update status to processing
             setProcessingPages(prev =>
@@ -134,7 +138,7 @@ export default function PageProcessor({
                 }
             } catch (error) {
                 console.error(
-                    `Error processing page ${page.pageNumber}:`,
+                    `❌ Error processing page ${page.pageNumber}:`,
                     error,
                 );
                 setProcessingPages(prev =>
@@ -151,6 +155,9 @@ export default function PageProcessor({
                             : p,
                     ),
                 );
+            } finally {
+                // Always decrease concurrent counter
+                setConcurrentProcessing(prev => Math.max(0, prev - 1));
             }
         },
         [processingPages, documentType, originalFileName, onPageComplete],
@@ -196,17 +203,24 @@ export default function PageProcessor({
             const estimatedSeconds = avgTimePerPage * remainingPages;
 
             if (estimatedSeconds < 60) {
-                console.log(`~${Math.round(estimatedSeconds)}s remaining`);
+                console.log(`⏱️ ~${Math.round(estimatedSeconds)}s remaining (${completedCount}/${totalCount} completed)`);
             } else {
                 const minutes = Math.round(estimatedSeconds / 60);
-                console.log(`~${minutes}m remaining`);
+                console.log(`⏱️ ~${minutes}m remaining (${completedCount}/${totalCount} completed)`);
             }
-        } else if (completedCount === totalCount) {
-            console.log('Processing complete!');
+        } else if (completedCount === totalCount && totalCount > 0) {
+            const totalTime = ((Date.now() - startTime) / 1000).toFixed(1);
+            console.log(`✅ Processing complete! Total time: ${totalTime}s for ${totalCount} pages`);
+        }
+
+        // Detect if too many pages are failing and suggest recovery
+        const failedCount = processingPages.filter(p => p.status === 'error').length;
+        if (failedCount > totalCount * 0.3 && totalCount > 10) {
+            console.warn(`⚠️ High failure rate detected: ${failedCount}/${totalCount} pages failed. Consider reducing batch size or checking backend capacity.`);
         }
     }, [processingPages, startTime]);
 
-    // Start processing all pages in parallel - only once
+    // Start processing pages in batches to prevent overwhelming the system
     useEffect(() => {
         if (processingStarted.current || pages.length === 0) {
             return; // Prevent duplicate processing
@@ -216,17 +230,45 @@ export default function PageProcessor({
         setStartTime(Date.now());
 
         const startProcessing = async () => {
-            console.log(`Starting to process ${pages.length} pages...`);
+            console.log(`🚀 Starting to process ${pages.length} pages in batches...`);
 
-            // Process all pages in parallel
-            const processingPromises = pages.map(page => processPage(page));
+            // Determine batch size based on total pages - Optimized for client server
+            const batchSize = pages.length > 30 ? 6 : pages.length > 20 ? 8 : pages.length > 10 ? 10 : 12;
+            console.log(`� Using optimized batch size: ${batchSize} for ${pages.length} pages (client server mode)`);
+
+            const processBatch = async (startIndex: number) => {
+                const endIndex = Math.min(startIndex + batchSize, pages.length);
+                const batch = pages.slice(startIndex, endIndex);
+                
+                console.log(`🔄 Processing batch ${Math.floor(startIndex / batchSize) + 1}/${Math.ceil(pages.length / batchSize)} (pages ${startIndex + 1}-${endIndex})`);
+                
+                // Process batch in parallel (smaller groups)
+                const batchPromises = batch.map(page => processPage(page));
+                
+                try {
+                    await Promise.allSettled(batchPromises);
+                    
+                    // Reduced delay between batches for client server performance
+                    if (endIndex < pages.length) {
+                        await new Promise(resolve => setTimeout(resolve, 300)); // Reduced from 1000ms to 300ms
+                        await processBatch(endIndex);
+                    }
+                } catch (error) {
+                    console.error(`Error in batch ${Math.floor(startIndex / batchSize) + 1}:`, error);
+                    // Continue with next batch even if current batch has errors
+                    if (endIndex < pages.length) {
+                        await new Promise(resolve => setTimeout(resolve, 2000)); // Longer delay on error
+                        await processBatch(endIndex);
+                    }
+                }
+            };
 
             try {
-                await Promise.allSettled(processingPromises);
-                console.log(`Finished processing all ${pages.length} pages`);
+                await processBatch(0);
+                console.log(`✅ Finished processing all ${pages.length} pages`);
                 onAllComplete();
             } catch (error) {
-                console.error('Error in parallel processing:', error);
+                console.error('Error in batch processing:', error);
             }
         };
 
