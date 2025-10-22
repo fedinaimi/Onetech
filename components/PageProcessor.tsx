@@ -409,13 +409,27 @@ export default function PageProcessor({
                     >
                         {/* Page Preview */}
                         <div className="aspect-[3/4] bg-gray-100 rounded-lg mb-3 overflow-hidden relative">
-                            <Image
-                                src={page.imageDataUrl}
-                                alt={`${originalFileName}-Page ${page.pageNumber}`}
-                                fill
-                                className="object-contain"
-                                unoptimized
-                            />
+                            {page.imageDataUrl ? (
+                                <Image
+                                    src={page.imageDataUrl}
+                                    alt={`${originalFileName}-Page ${page.pageNumber}`}
+                                    fill
+                                    className="object-contain"
+                                    unoptimized
+                                />
+                            ) : (
+                                <div className="w-full h-full flex items-center justify-center text-gray-500">
+                                    <div className="text-center">
+                                        <div className="text-4xl mb-2">📄</div>
+                                        <div className="text-sm">Page {page.pageNumber}</div>
+                                        <div className="text-xs text-gray-400">
+                                            {page.status === 'pending' ? 'Waiting...' : 
+                                             page.status === 'processing' ? 'Processing...' : 
+                                             page.status === 'completed' ? 'Complete' : 'Error'}
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
                         </div>
 
                         {/* Page Info */}

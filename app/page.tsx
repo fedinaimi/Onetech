@@ -493,7 +493,23 @@ export default function HomePage() {
         }
     }, [processingImage, isProcessingImage, saveImageProcessingState]);
 
-    // Session recovery on mount
+    // Update page title to show processing status
+    React.useEffect(() => {
+        if (typeof window === 'undefined') return;
+        
+        if (isProcessingPDF && processingPages.length > 0) {
+            const completed = processingPages.filter(p => p.status === 'completed').length;
+            const total = processingPages.length;
+            const percentage = Math.round((completed / total) * 100);
+            document.title = `Processing PDF... ${percentage}% (${completed}/${total}) - OneTech`;
+        } else if (isProcessingImage) {
+            document.title = 'Processing Image... - OneTech';
+        } else {
+            document.title = 'OneTech - Document Extractor';
+        }
+    }, [isProcessingPDF, isProcessingImage, processingPages]);
+
+    // Enhanced session recovery with cross-tab synchronization
     React.useEffect(() => {
         // Only run on client-side after initial mount
         if (typeof window === 'undefined') return;
@@ -509,9 +525,30 @@ export default function HomePage() {
             } catch (error) {
                 console.error('Error during session recovery:', error);
             }
-        }, 100); // Small delay to ensure component is fully mounted
+        }, 100);
 
-        return () => clearTimeout(timer);
+        // Listen for storage changes across tabs
+        const handleStorageChange = (e: StorageEvent) => {
+            if (e.key === 'processing-state' && e.newValue) {
+                try {
+                    const newState = JSON.parse(e.newValue);
+                    console.log('🔄 Processing state updated in another tab, syncing...');
+                    if (newState.pages) {
+                        setProcessingPages(newState.pages);
+                        setIsProcessingPDF(newState.isProcessing);
+                        setSelectedType(newState.documentType);
+                    }
+                } catch (error) {
+                    console.error('Error syncing cross-tab state:', error);
+                }
+            }
+        };
+
+        window.addEventListener('storage', handleStorageChange);
+        return () => {
+            clearTimeout(timer);
+            window.removeEventListener('storage', handleStorageChange);
+        };
     }, []); // Empty dependency array - only run once on mount
 
     const handleImageUpload = useCallback(
@@ -1184,6 +1221,13 @@ export default function HomePage() {
                                             onClick={() => {
                                                 setIsProcessingPDF(true);
                                                 console.log('🔄 Resuming processing session...');
+                                                // Scroll to processing section after resuming
+                                                setTimeout(() => {
+                                                    const processingElement = document.getElementById('processing-section');
+                                                    if (processingElement) {
+                                                        processingElement.scrollIntoView({ behavior: 'smooth' });
+                                                    }
+                                                }, 500);
                                             }}
                                             className="bg-amber-600 hover:bg-amber-700 text-white text-sm px-3 py-1 rounded transition-colors"
                                         >
@@ -1210,6 +1254,44 @@ export default function HomePage() {
                 }
                 return null;
             })()}
+
+            {/* Floating Processing Indicator - Always visible when processing */}
+            {(isProcessingPDF || isProcessingImage) && (
+                <div className="fixed top-4 right-4 z-50 bg-white rounded-lg shadow-lg border border-gray-200 p-4 max-w-sm">
+                    <div className="flex items-center space-x-3">
+                        <div className="flex-shrink-0">
+                            <Loader2 className="h-5 w-5 text-blue-600 animate-spin" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                            <div className="text-sm font-medium text-gray-900">
+                                {isProcessingPDF ? 'Processing PDF' : 'Processing Image'}
+                            </div>
+                            {isProcessingPDF && (
+                                <div className="text-xs text-gray-500">
+                                    {(() => {
+                                        const completed = processingPages.filter(p => p.status === 'completed').length;
+                                        const total = processingPages.length;
+                                        const percentage = total > 0 ? Math.round((completed / total) * 100) : 0;
+                                        return `${completed}/${total} pages (${percentage}%)`;
+                                    })()}
+                                </div>
+                            )}
+                        </div>
+                        <button
+                            onClick={() => {
+                                // Show processing view - scroll to processing section
+                                const processingElement = document.getElementById('processing-section');
+                                if (processingElement) {
+                                    processingElement.scrollIntoView({ behavior: 'smooth' });
+                                }
+                            }}
+                            className="flex-shrink-0 text-blue-600 hover:text-blue-800 text-xs font-medium"
+                        >
+                            View Details
+                        </button>
+                    </div>
+                </div>
+            )}
 
             <div className="max-w-7xl mx-auto px-3 sm:px-4 md:px-6 lg:px-8 py-3 sm:py-4 md:py-6 lg:py-8">
                 {/* Title */}
@@ -1510,7 +1592,8 @@ export default function HomePage() {
 
                 {/* Page Processing Component */}
                 {processingPages.length > 0 && (
-                    <PageProcessor
+                    <div id="processing-section">
+                        <PageProcessor
                         pages={processingPages}
                         documentType={selectedType}
                         originalFileName={
@@ -1520,6 +1603,7 @@ export default function HomePage() {
                         onPageComplete={handlePageComplete}
                         onAllComplete={handleAllComplete}
                     />
+                    </div>
                 )}
 
                 {/* Image Processing Component */}
