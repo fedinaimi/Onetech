@@ -11,17 +11,20 @@ let undiciAgent: any | undefined;
 // For client server - no timeout restrictions (remove Vercel limits)
 // export const maxDuration = 300; // Not needed for self-hosted
 
-
 const ONETECH_API_URL =
     process.env.NEXT_PUBLIC_EXTRACT_API ||
     'http://onetech-backend-gdl7h722ruzvs.francecentral.azurecontainer.io:8000/extract/';
 
-const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://127.0.0.1:8000';
+const BACKEND_URL =
+    process.env.NEXT_PUBLIC_BACKEND_URL || 'http://127.0.0.1:8000';
 
 /**
  * Helper function to save document to backend
  */
-async function saveDocumentToBackend(document: any, documentType: DocumentType) {
+async function saveDocumentToBackend(
+    document: any,
+    documentType: DocumentType,
+) {
     try {
         const response = await fetch(`${BACKEND_URL}/documents/`, {
             method: 'POST',
@@ -32,8 +35,12 @@ async function saveDocumentToBackend(document: any, documentType: DocumentType) 
         });
 
         if (!response.ok) {
-            const error = await response.json().catch(() => ({ error: 'Failed to save document' }));
-            throw new Error(error.error || 'Failed to save document to backend');
+            const error = await response
+                .json()
+                .catch(() => ({ error: 'Failed to save document' }));
+            throw new Error(
+                error.error || 'Failed to save document to backend',
+            );
         }
 
         return await response.json();
@@ -48,16 +55,23 @@ async function saveDocumentToBackend(document: any, documentType: DocumentType) 
  */
 async function getDocumentsFromBackend(documentType: DocumentType) {
     try {
-        const response = await fetch(`${BACKEND_URL}/documents/?type=${documentType}`, {
-            method: 'GET',
-            headers: {
-                'Content-Type': 'application/json',
+        const response = await fetch(
+            `${BACKEND_URL}/documents/?type=${documentType}`,
+            {
+                method: 'GET',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
             },
-        });
+        );
 
         if (!response.ok) {
-            const error = await response.json().catch(() => ({ error: 'Failed to fetch documents' }));
-            throw new Error(error.error || 'Failed to fetch documents from backend');
+            const error = await response
+                .json()
+                .catch(() => ({ error: 'Failed to fetch documents' }));
+            throw new Error(
+                error.error || 'Failed to fetch documents from backend',
+            );
         }
 
         return await response.json();
@@ -102,7 +116,9 @@ async function checkExistingDocument(
     pageNumber: number,
 ) {
     try {
-        const documents = await getDocumentsFromBackend(documentType as DocumentType);
+        const documents = await getDocumentsFromBackend(
+            documentType as DocumentType,
+        );
         return documents.find(
             (doc: any) =>
                 doc.metadata?.original_filename === filename &&
@@ -254,45 +270,60 @@ async function processPageWithExternalAPI(
             }
 
             // Retry logic for better reliability
-            let retries = 2;
+            const retries = 2;
             let lastError;
-            
+
             for (let attempt = 1; attempt <= retries + 1; attempt++) {
                 try {
-                    console.log(`Page ${pageNumber} - Attempt ${attempt}/${retries + 1}`);
+                    console.log(
+                        `Page ${pageNumber} - Attempt ${attempt}/${retries + 1}`,
+                    );
                     response = await fetch(ONETECH_API_URL, fetchOptions);
                     break; // Success, exit retry loop
                 } catch (fetchError: any) {
                     lastError = fetchError;
-                    console.error(`Page ${pageNumber} - Attempt ${attempt} failed:`, fetchError);
-                    
+                    console.error(
+                        `Page ${pageNumber} - Attempt ${attempt} failed:`,
+                        fetchError,
+                    );
+
                     // Don't retry on timeout (AbortError)
                     if (fetchError?.name === 'AbortError') {
                         break;
                     }
-                    
+
                     // Wait before retry (exponential backoff)
                     if (attempt <= retries) {
-                        const delay = Math.min(1000 * Math.pow(2, attempt - 1), 5000); // Max 5s delay
-                        console.log(`Page ${pageNumber} - Retrying in ${delay}ms...`);
-                        await new Promise(resolve => setTimeout(resolve, delay));
+                        const delay = Math.min(
+                            1000 * Math.pow(2, attempt - 1),
+                            5000,
+                        ); // Max 5s delay
+                        console.log(
+                            `Page ${pageNumber} - Retrying in ${delay}ms...`,
+                        );
+                        await new Promise(resolve =>
+                            setTimeout(resolve, delay),
+                        );
                     }
                 }
             }
-            
+
             if (!response) {
-                let errorMessage = 'Failed to connect to external API after retries';
+                let errorMessage =
+                    'Failed to connect to external API after retries';
                 if (lastError?.name === 'AbortError') {
                     errorMessage = 'Request timeout (3 minutes)';
                 } else if (
                     lastError?.code === 'UND_ERR_HEADERS_TIMEOUT' ||
                     lastError?.cause?.code === 'UND_ERR_HEADERS_TIMEOUT'
                 ) {
-                    errorMessage = 'Headers timeout - external API may be overloaded';
+                    errorMessage =
+                        'Headers timeout - external API may be overloaded';
                 } else if (lastError?.code === 'ECONNREFUSED') {
                     errorMessage = 'Connection refused - backend may be down';
                 } else if (lastError?.code === 'ECONNRESET') {
-                    errorMessage = 'Connection reset - network issue or backend overload';
+                    errorMessage =
+                        'Connection reset - network issue or backend overload';
                 }
                 return {
                     success: false,

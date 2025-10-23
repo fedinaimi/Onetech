@@ -15,11 +15,11 @@ type DocumentType = 'Rebut' | 'NPT' | 'Kosu';
 // Custom hook to check if we're on the client side
 const useIsClient = () => {
     const [isClient, setIsClient] = React.useState(false);
-    
+
     React.useEffect(() => {
         setIsClient(true);
     }, []);
-    
+
     return isClient;
 };
 
@@ -126,20 +126,25 @@ export default function HomePage() {
     const checkStorageUsage = useCallback(() => {
         try {
             let totalSize = 0;
-            for (let key in localStorage) {
+            for (const key in localStorage) {
                 if (localStorage.hasOwnProperty(key)) {
                     totalSize += localStorage[key].length;
                 }
             }
             const usageKB = Math.round(totalSize / 1024);
             const usageMB = (usageKB / 1024).toFixed(2);
-            
-            if (usageKB > 3000) { // Warn if over 3MB
-                console.warn(`⚠️ localStorage usage: ${usageKB}KB (${usageMB}MB) - approaching quota limit`);
+
+            if (usageKB > 3000) {
+                // Warn if over 3MB
+                console.warn(
+                    `⚠️ localStorage usage: ${usageKB}KB (${usageMB}MB) - approaching quota limit`,
+                );
             } else {
-                console.log(`💾 localStorage usage: ${usageKB}KB (${usageMB}MB)`);
+                console.log(
+                    `💾 localStorage usage: ${usageKB}KB (${usageMB}MB)`,
+                );
             }
-            
+
             return { totalKB: usageKB, totalMB: parseFloat(usageMB) };
         } catch (error) {
             console.error('Error checking storage usage:', error);
@@ -151,23 +156,30 @@ export default function HomePage() {
     const cleanupStuckSessions = useCallback(() => {
         try {
             if (typeof window === 'undefined') return;
-            
+
             // Check for old batch sessions
-            const batchSession = JSON.parse(localStorage.getItem('batch-session') || '{}');
+            const batchSession = JSON.parse(
+                localStorage.getItem('batch-session') || '{}',
+            );
             if (batchSession.sessionId) {
                 const sessionAge = Date.now() - (batchSession.timestamp || 0);
-                if (sessionAge > 3600000) { // 1 hour - keep sessions longer for reload persistence
-                    console.log('🗑️ Clearing expired batch session:', batchSession.sessionId);
+                if (sessionAge > 3600000) {
+                    // 1 hour - keep sessions longer for reload persistence
+                    console.log(
+                        '🗑️ Clearing expired batch session:',
+                        batchSession.sessionId,
+                    );
                     localStorage.removeItem('batch-session');
                 }
             }
-            
+
             // Clean up processing state if too old
             const processingState = localStorage.getItem('processing-state');
             if (processingState) {
                 const parsed = JSON.parse(processingState);
                 const stateAge = Date.now() - (parsed.timestamp || 0);
-                if (stateAge > 3600000) { // 1 hour - keep processing state longer for reload persistence
+                if (stateAge > 3600000) {
+                    // 1 hour - keep processing state longer for reload persistence
                     console.log('🗑️ Clearing expired processing state');
                     localStorage.removeItem('processing-state');
                 }
@@ -185,29 +197,31 @@ export default function HomePage() {
 
     // Force reset all processing states - use when completely stuck
     const forceResetAllStates = useCallback(() => {
-        console.log('🚨 FORCE RESET: Clearing all states and stopping all processing');
-        
+        console.log(
+            '🚨 FORCE RESET: Clearing all states and stopping all processing',
+        );
+
         // Stop any processing
         setIsProcessingPDF(false);
         setProcessingPages([]);
         setUploadingFiles([]);
-        
+
         // Clear all storage
         if (typeof window !== 'undefined') {
             localStorage.clear();
             sessionStorage.clear();
         }
-        
+
         // Force page reload to ensure clean state
         if (typeof window !== 'undefined') {
             window.location.reload();
         }
-    }, []);    // Load persisted processing state on mount
+    }, []); // Load persisted processing state on mount
     const loadPersistedProcessingState = useCallback(() => {
         try {
             // First clean up any stuck sessions
             cleanupStuckSessions();
-            
+
             const savedState = localStorage.getItem('processing-state');
             if (savedState) {
                 const {
@@ -224,7 +238,7 @@ export default function HomePage() {
                     console.log(
                         `📦 Restoring processing state: ${incompletePages.length} incomplete pages (image data will be regenerated)`,
                     );
-                    
+
                     // Convert lightweight format back to full PageData format
                     const restoredPages: PageData[] = pages.map((p: any) => ({
                         pageNumber: p.pageNumber,
@@ -236,14 +250,18 @@ export default function HomePage() {
                         extractedData: p.extractedData,
                         error: p.error,
                     }));
-                    
+
                     setProcessingPages(restoredPages);
                     setIsProcessingPDF(isProcessing);
-                    
+
                     // Auto-resume processing if there are pending/error pages
-                    const pendingPages = restoredPages.filter(p => p.status === 'pending' || p.status === 'error');
+                    const pendingPages = restoredPages.filter(
+                        p => p.status === 'pending' || p.status === 'error',
+                    );
                     if (pendingPages.length > 0 && !isProcessing) {
-                        console.log(`🔄 Auto-resuming processing for ${pendingPages.length} pending pages`);
+                        console.log(
+                            `🔄 Auto-resuming processing for ${pendingPages.length} pending pages`,
+                        );
                         setTimeout(() => {
                             setIsProcessingPDF(true);
                             // The PageProcessor component will handle the actual processing
@@ -256,11 +274,20 @@ export default function HomePage() {
             }
 
             // Also check for minimal fallback state
-            const minimalState = localStorage.getItem('processing-state-minimal');
+            const minimalState = localStorage.getItem(
+                'processing-state-minimal',
+            );
             if (minimalState && !savedState) {
-                const { pageCount, isProcessing, documentType: savedType, originalFileName } = JSON.parse(minimalState);
+                const {
+                    pageCount,
+                    isProcessing,
+                    documentType: savedType,
+                    originalFileName,
+                } = JSON.parse(minimalState);
                 if (savedType === selectedType && isProcessing) {
-                    console.log(`📦 Found minimal processing state for ${pageCount} pages - will need to restart PDF splitting`);
+                    console.log(
+                        `📦 Found minimal processing state for ${pageCount} pages - will need to restart PDF splitting`,
+                    );
                     // Note: Don't auto-restore minimal state as it lacks page data
                     localStorage.removeItem('processing-state-minimal');
                 }
@@ -280,7 +307,7 @@ export default function HomePage() {
                 if (typeof window === 'undefined') {
                     return;
                 }
-                
+
                 // Save PDF file info for resume capability
                 const sessionData = {
                     originalFileName: file.name,
@@ -291,14 +318,19 @@ export default function HomePage() {
                     timestamp: Date.now(),
                     sessionId: `pdf_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
                 };
-                
-                sessionStorage.setItem('pdf-session', JSON.stringify(sessionData));
-                console.log(`💾 Saved PDF session: ${file.name} (${pages.length} pages)`);
+
+                sessionStorage.setItem(
+                    'pdf-session',
+                    JSON.stringify(sessionData),
+                );
+                console.log(
+                    `💾 Saved PDF session: ${file.name} (${pages.length} pages)`,
+                );
             } catch (error) {
                 console.error('Error saving PDF session:', error);
             }
         },
-        []
+        [],
     );
 
     // Load PDF session on reload
@@ -308,11 +340,13 @@ export default function HomePage() {
             if (typeof window === 'undefined') {
                 return null;
             }
-            
+
             const sessionData = sessionStorage.getItem('pdf-session');
             if (sessionData) {
                 const parsed = JSON.parse(sessionData);
-                console.log(`📦 Found PDF session: ${parsed.originalFileName} (${parsed.pageCount} pages)`);
+                console.log(
+                    `📦 Found PDF session: ${parsed.originalFileName} (${parsed.pageCount} pages)`,
+                );
                 return parsed;
             }
         } catch (error) {
@@ -352,15 +386,20 @@ export default function HomePage() {
                 // Calculate approximate size before storing
                 const stateString = JSON.stringify(state);
                 const sizeKB = Math.round(stateString.length / 1024);
-                
-                if (sizeKB > 4000) { // If larger than 4MB, don't store
-                    console.warn(`⚠️ Processing state too large (${sizeKB}KB) - skipping localStorage save`);
+
+                if (sizeKB > 4000) {
+                    // If larger than 4MB, don't store
+                    console.warn(
+                        `⚠️ Processing state too large (${sizeKB}KB) - skipping localStorage save`,
+                    );
                     return;
                 }
 
                 localStorage.setItem('processing-state', stateString);
-                console.log(`💾 Saved processing state (${sizeKB}KB) for ${lightweightPages.length} pages`);
-                
+                console.log(
+                    `💾 Saved processing state (${sizeKB}KB) for ${lightweightPages.length} pages`,
+                );
+
                 // Check total storage usage after saving
                 setTimeout(() => checkStorageUsage(), 100);
             } catch (error) {
@@ -375,10 +414,18 @@ export default function HomePage() {
                         originalFileName: fileName,
                         timestamp: Date.now(),
                     };
-                    localStorage.setItem('processing-state-minimal', JSON.stringify(minimalState));
-                    console.log('💾 Saved minimal processing state as fallback');
+                    localStorage.setItem(
+                        'processing-state-minimal',
+                        JSON.stringify(minimalState),
+                    );
+                    console.log(
+                        '💾 Saved minimal processing state as fallback',
+                    );
                 } catch (fallbackError) {
-                    console.error('Failed to save even minimal state:', fallbackError);
+                    console.error(
+                        'Failed to save even minimal state:',
+                        fallbackError,
+                    );
                 }
             }
         },
@@ -427,7 +474,7 @@ export default function HomePage() {
             return;
         }
         lastLoadTime.current = now;
-        
+
         setIsLoading(true);
         try {
             const response = await axios.get(
@@ -451,7 +498,7 @@ export default function HomePage() {
     React.useEffect(() => {
         // Clean up only stuck sessions, but preserve valid ones for reload persistence
         cleanupStuckSessions(); // This now uses 1-hour timeout instead of clearing everything
-        
+
         loadDocuments();
         loadDocumentCounts(); // Load all counts
         loadPersistedProcessingState(); // Re-enabled for reload persistence
@@ -484,20 +531,18 @@ export default function HomePage() {
         window.addEventListener('beforeunload', handleBeforeUnload);
         return () =>
             window.removeEventListener('beforeunload', handleBeforeUnload);
-    }, [
-        processingPages,
-        isProcessingPDF,
-        saveProcessingState,
-    ]);
+    }, [processingPages, isProcessingPDF, saveProcessingState]);
 
     // Removed image processing state saving - now using unified backend processing
 
     // Update page title to show processing status
     React.useEffect(() => {
         if (typeof window === 'undefined') return;
-        
+
         if (isProcessingPDF && processingPages.length > 0) {
-            const completed = processingPages.filter(p => p.status === 'completed').length;
+            const completed = processingPages.filter(
+                p => p.status === 'completed',
+            ).length;
             const total = processingPages.length;
             const percentage = Math.round((completed / total) * 100);
             document.title = `Processing... ${percentage}% (${completed}/${total}) - OneTech`;
@@ -510,14 +555,16 @@ export default function HomePage() {
     React.useEffect(() => {
         // Only run on client-side after initial mount
         if (typeof window === 'undefined') return;
-        
+
         const timer = setTimeout(() => {
             try {
                 // TEMPORARILY DISABLED - loadPersistedProcessingState();
                 const pdfSession = loadPDFSession();
-                
+
                 if (pdfSession) {
-                    console.log(`🔍 Checking for recoverable PDF session: ${pdfSession.originalFileName}`);
+                    console.log(
+                        `🔍 Checking for recoverable PDF session: ${pdfSession.originalFileName}`,
+                    );
                 }
             } catch (error) {
                 console.error('Error during session recovery:', error);
@@ -529,7 +576,9 @@ export default function HomePage() {
             if (e.key === 'processing-state' && e.newValue) {
                 try {
                     const newState = JSON.parse(e.newValue);
-                    console.log('🔄 Processing state updated in another tab, syncing...');
+                    console.log(
+                        '🔄 Processing state updated in another tab, syncing...',
+                    );
                     if (newState.pages) {
                         setProcessingPages(newState.pages);
                         setIsProcessingPDF(newState.isProcessing);
@@ -559,7 +608,10 @@ export default function HomePage() {
                 formData.append('file', file);
                 formData.append('documentType', selectedType);
 
-                console.log('Starting backend processing for image:', file.name);
+                console.log(
+                    'Starting backend processing for image:',
+                    file.name,
+                );
                 const batchResponse = await axios.post(
                     '/api/start-batch-processing',
                     formData,
@@ -571,43 +623,57 @@ export default function HomePage() {
                 if (batchResponse.data.success) {
                     const sessionId = batchResponse.data.sessionId;
                     const status = batchResponse.data.status;
-                    
-                    console.log(`Backend batch processing started for image with session: ${sessionId}`);
-                    
+
+                    console.log(
+                        `Backend batch processing started for image with session: ${sessionId}`,
+                    );
+
                     // Create page data structure for single image
-                    const pages: PageData[] = [{
-                        pageNumber: 1,
-                        fileName: file.name,
-                        mimeType: file.type,
-                        imageDataUrl: '', // Will be filled by backend
-                        bufferSize: file.size,
-                        status: 'pending',
-                        extractedData: null,
-                        error: null,
-                    }];
-                    
+                    const pages: PageData[] = [
+                        {
+                            pageNumber: 1,
+                            fileName: file.name,
+                            mimeType: file.type,
+                            imageDataUrl: '', // Will be filled by backend
+                            bufferSize: file.size,
+                            status: 'pending',
+                            extractedData: null,
+                            error: null,
+                        },
+                    ];
+
                     setProcessingPages(pages);
-                    
+
                     // Store session info for PageProcessor polling
                     if (typeof window !== 'undefined') {
-                        localStorage.setItem('batch-session', JSON.stringify({
-                            sessionId: sessionId,
-                            timestamp: Date.now(),
-                            originalFileName: file.name,
-                            documentType: selectedType,
-                            totalPages: 1
-                        }));
+                        localStorage.setItem(
+                            'batch-session',
+                            JSON.stringify({
+                                sessionId: sessionId,
+                                timestamp: Date.now(),
+                                originalFileName: file.name,
+                                documentType: selectedType,
+                                totalPages: 1,
+                            }),
+                        );
                     }
 
                     // Save processing state
                     saveProcessingState(pages, true, file.name);
                 } else {
-                    throw new Error(batchResponse.data.error || 'Failed to start backend processing');
+                    throw new Error(
+                        batchResponse.data.error ||
+                            'Failed to start backend processing',
+                    );
                 }
             } catch (error) {
                 console.error('Error starting image processing:', error);
                 setIsProcessingPDF(false);
-                alert(error instanceof Error ? error.message : 'Failed to start processing');
+                alert(
+                    error instanceof Error
+                        ? error.message
+                        : 'Failed to start processing',
+                );
             }
         },
         [selectedType, saveProcessingState],
@@ -741,7 +807,10 @@ export default function HomePage() {
                 formData.append('file', file);
                 formData.append('documentType', selectedType);
 
-                console.log('Starting backend batch processing for PDF:', file.name);
+                console.log(
+                    'Starting backend batch processing for PDF:',
+                    file.name,
+                );
                 const batchResponse = await axios.post(
                     '/api/start-batch-processing',
                     formData,
@@ -753,9 +822,11 @@ export default function HomePage() {
                 if (batchResponse.data.success) {
                     const sessionId = batchResponse.data.sessionId;
                     const status = batchResponse.data.status;
-                    
-                    console.log(`Backend batch processing started with session: ${sessionId}`);
-                    
+
+                    console.log(
+                        `Backend batch processing started with session: ${sessionId}`,
+                    );
+
                     // Create page data structure from the status for the UI
                     const pages: PageData[] = Array.from(
                         { length: status.total_pages },
@@ -768,11 +839,11 @@ export default function HomePage() {
                             status: 'pending' as const,
                             extractedData: null,
                             error: null,
-                        })
+                        }),
                     );
-                    
+
                     setProcessingPages(pages);
-                    
+
                     // Store session ID for polling
                     const pdfSession = {
                         sessionId,
@@ -783,16 +854,20 @@ export default function HomePage() {
                         pageCount: status.total_pages,
                         timestamp: Date.now(),
                     };
-                    
+
                     if (typeof window !== 'undefined') {
-                        localStorage.setItem('batch-session', JSON.stringify(pdfSession));
+                        localStorage.setItem(
+                            'batch-session',
+                            JSON.stringify(pdfSession),
+                        );
                     }
-                    
+
                     // Save processing state
                     saveProcessingState(pages, true, file.name);
                 } else {
                     throw new Error(
-                        batchResponse.data.error || 'Failed to start batch processing',
+                        batchResponse.data.error ||
+                            'Failed to start batch processing',
                     );
                 }
             } catch (error) {
@@ -897,7 +972,9 @@ export default function HomePage() {
         localStorage.removeItem('processing-state');
 
         // No need to refresh documents - they're already updated via onPageComplete
-        console.log('Processing complete - documents already updated via page completion callbacks');
+        console.log(
+            'Processing complete - documents already updated via page completion callbacks',
+        );
     }, []);
 
     const handleCellEdit = async (
@@ -1211,63 +1288,92 @@ export default function HomePage() {
             <HeaderBar />
 
             {/* Session Recovery Banner */}
-            {isClient && (() => {
-                const pdfSession = loadPDFSession();
-                const hasUnfinishedProcessing = processingPages.some(p => p.status === 'pending' || p.status === 'error');
-                
-                if (pdfSession && hasUnfinishedProcessing && !isProcessingPDF) {
-                    return (
-                        <div className="max-w-7xl mx-auto px-3 sm:px-4 md:px-6 lg:px-8 py-2">
-                            <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 mb-4">
-                                <div className="flex items-center justify-between">
-                                    <div className="flex items-center space-x-3">
-                                        <div className="flex-shrink-0">
-                                            <svg className="h-5 w-5 text-amber-600" fill="currentColor" viewBox="0 0 20 20">
-                                                <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
-                                            </svg>
-                                        </div>
-                                        <div>
-                                            <h3 className="text-sm font-medium text-amber-800">
-                                                Resume Processing Session
-                                            </h3>
-                                            <p className="text-sm text-amber-700">
-                                                Found unfinished processing for "{pdfSession.originalFileName}" ({pdfSession.pageCount} pages)
-                                            </p>
-                                        </div>
-                                    </div>
-                                    <div className="flex space-x-2">
-                                        <button
-                                            onClick={() => {
-                                                setIsProcessingPDF(true);
-                                                console.log('🔄 Resuming processing session...');
-                                                // Scroll to processing section after resuming
-                                                setTimeout(() => {
-                                                    const processingElement = document.getElementById('processing-section');
-                                                    if (processingElement) {
-                                                        processingElement.scrollIntoView({ behavior: 'smooth' });
+            {isClient &&
+                (() => {
+                    const pdfSession = loadPDFSession();
+                    const hasUnfinishedProcessing = processingPages.some(
+                        p => p.status === 'pending' || p.status === 'error',
+                    );
+
+                    if (
+                        pdfSession &&
+                        hasUnfinishedProcessing &&
+                        !isProcessingPDF
+                    ) {
+                        return (
+                            <div className="max-w-7xl mx-auto px-3 sm:px-4 md:px-6 lg:px-8 py-2">
+                                <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 mb-4">
+                                    <div className="flex items-center justify-between">
+                                        <div className="flex items-center space-x-3">
+                                            <div className="flex-shrink-0">
+                                                <svg
+                                                    className="h-5 w-5 text-amber-600"
+                                                    fill="currentColor"
+                                                    viewBox="0 0 20 20"
+                                                >
+                                                    <path
+                                                        fillRule="evenodd"
+                                                        d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z"
+                                                        clipRule="evenodd"
+                                                    />
+                                                </svg>
+                                            </div>
+                                            <div>
+                                                <h3 className="text-sm font-medium text-amber-800">
+                                                    Resume Processing Session
+                                                </h3>
+                                                <p className="text-sm text-amber-700">
+                                                    Found unfinished processing
+                                                    for "
+                                                    {
+                                                        pdfSession.originalFileName
                                                     }
-                                                }, 500);
-                                            }}
-                                            className="bg-amber-600 hover:bg-amber-700 text-white text-sm px-3 py-1 rounded transition-colors"
-                                        >
-                                            Resume Processing
-                                        </button>
-                                        <button
-                                            onClick={forceResetAllStates}
-                                            className="bg-red-500 hover:bg-red-600 text-white text-sm px-3 py-1 rounded transition-colors"
-                                        >
-                                            Force Reset All
-                                        </button>
+                                                    " ({pdfSession.pageCount}{' '}
+                                                    pages)
+                                                </p>
+                                            </div>
+                                        </div>
+                                        <div className="flex space-x-2">
+                                            <button
+                                                onClick={() => {
+                                                    setIsProcessingPDF(true);
+                                                    console.log(
+                                                        '🔄 Resuming processing session...',
+                                                    );
+                                                    // Scroll to processing section after resuming
+                                                    setTimeout(() => {
+                                                        const processingElement =
+                                                            document.getElementById(
+                                                                'processing-section',
+                                                            );
+                                                        if (processingElement) {
+                                                            processingElement.scrollIntoView(
+                                                                {
+                                                                    behavior:
+                                                                        'smooth',
+                                                                },
+                                                            );
+                                                        }
+                                                    }, 500);
+                                                }}
+                                                className="bg-amber-600 hover:bg-amber-700 text-white text-sm px-3 py-1 rounded transition-colors"
+                                            >
+                                                Resume Processing
+                                            </button>
+                                            <button
+                                                onClick={forceResetAllStates}
+                                                className="bg-red-500 hover:bg-red-600 text-white text-sm px-3 py-1 rounded transition-colors"
+                                            >
+                                                Force Reset All
+                                            </button>
+                                        </div>
                                     </div>
                                 </div>
                             </div>
-                        </div>
-                    );
-                }
-                return null;
-            })()}
-
-
+                        );
+                    }
+                    return null;
+                })()}
 
             <div className="max-w-7xl mx-auto px-3 sm:px-4 md:px-6 lg:px-8 py-3 sm:py-4 md:py-6 lg:py-8">
                 {/* Title */}
@@ -1377,8 +1483,8 @@ export default function HomePage() {
                                             {isProcessingPDF
                                                 ? 'Processing...'
                                                 : isUploading
-                                                    ? 'Preparing files...'
-                                                    : 'Uploading...'}
+                                                  ? 'Preparing files...'
+                                                  : 'Uploading...'}
                                         </span>
                                         <span className="sm:hidden">
                                             {isProcessingPDF
@@ -1565,19 +1671,18 @@ export default function HomePage() {
                 {processingPages.length > 0 && (
                     <div id="processing-section">
                         <PageProcessor
-                        pages={processingPages}
-                        documentType={selectedType}
-                        originalFileName={
-                            processingPages[0]?.fileName?.split('-page-')[0] ||
-                            'document'
-                        }
-                        onPageComplete={handlePageComplete}
-                        onAllComplete={handleAllComplete}
-                    />
+                            pages={processingPages}
+                            documentType={selectedType}
+                            originalFileName={
+                                processingPages[0]?.fileName?.split(
+                                    '-page-',
+                                )[0] || 'document'
+                            }
+                            onPageComplete={handlePageComplete}
+                            onAllComplete={handleAllComplete}
+                        />
                     </div>
                 )}
-
-
 
                 {/* Documents List */}
                 <DocumentList

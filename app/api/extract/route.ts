@@ -12,14 +12,18 @@ const ONETECH_API_URL =
     process.env.NEXT_PUBLIC_EXTRACT_API ||
     'http://onetech-backend-gdl7h722ruzvs.francecentral.azurecontainer.io:8000/extract/';
 
-const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://127.0.0.1:8000';
+const BACKEND_URL =
+    process.env.NEXT_PUBLIC_BACKEND_URL || 'http://127.0.0.1:8000';
 
 type DocumentType = 'Rebut' | 'NPT' | 'Kosu';
 
 /**
  * Helper function to save document to backend
  */
-async function saveDocumentToBackend(document: any, documentType: DocumentType) {
+async function saveDocumentToBackend(
+    document: any,
+    documentType: DocumentType,
+) {
     try {
         const response = await fetch(`${BACKEND_URL}/documents/`, {
             method: 'POST',
@@ -30,8 +34,12 @@ async function saveDocumentToBackend(document: any, documentType: DocumentType) 
         });
 
         if (!response.ok) {
-            const error = await response.json().catch(() => ({ error: 'Failed to save document' }));
-            throw new Error(error.error || 'Failed to save document to backend');
+            const error = await response
+                .json()
+                .catch(() => ({ error: 'Failed to save document' }));
+            throw new Error(
+                error.error || 'Failed to save document to backend',
+            );
         }
 
         return await response.json();

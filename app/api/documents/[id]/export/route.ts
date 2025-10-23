@@ -2,7 +2,8 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 
-const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://127.0.0.1:8000';
+const BACKEND_URL =
+    process.env.NEXT_PUBLIC_BACKEND_URL || 'http://127.0.0.1:8000';
 
 // Type definitions for export data
 type CommonExportData = {
@@ -140,7 +141,7 @@ export async function GET(
         for (const type of types) {
             try {
                 const response = await fetch(
-                    `${BACKEND_URL}/documents/${documentId}/?type=${type}`
+                    `${BACKEND_URL}/documents/${documentId}/?type=${type}`,
                 );
                 if (response.ok) {
                     document = await response.json();

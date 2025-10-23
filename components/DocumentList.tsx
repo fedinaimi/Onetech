@@ -299,10 +299,14 @@ export default function DocumentList({
                 let errorMessage = `Export failed with status ${response.status}`;
                 try {
                     const errorData = await response.json();
-                    errorMessage = errorData.error || errorData.detail || errorMessage;
+                    errorMessage =
+                        errorData.error || errorData.detail || errorMessage;
                     console.error('[EXPORT] Error response:', errorData);
                 } catch (e) {
-                    console.error('[EXPORT] Could not parse error response:', e);
+                    console.error(
+                        '[EXPORT] Could not parse error response:',
+                        e,
+                    );
                 }
                 throw new Error(errorMessage);
             }

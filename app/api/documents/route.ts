@@ -25,7 +25,7 @@ export async function GET(request: NextRequest) {
 
         // Build backend URL
         let backendUrl = `${BACKEND_API_URL}/documents/`;
-        
+
         if (exportFormat) {
             // Export endpoint
             backendUrl = `${BACKEND_API_URL}/documents/export/?type=${type}&format=${exportFormat}`;
@@ -45,7 +45,9 @@ export async function GET(request: NextRequest) {
         });
 
         if (!response.ok) {
-            const error = await response.json().catch(() => ({ error: 'Backend request failed' }));
+            const error = await response
+                .json()
+                .catch(() => ({ error: 'Backend request failed' }));
             return NextResponse.json(error, { status: response.status });
         }
 
@@ -56,7 +58,8 @@ export async function GET(request: NextRequest) {
             return new NextResponse(csv, {
                 headers: {
                     'Content-Type': 'text/csv',
-                    'Content-Disposition': response.headers.get('content-disposition') || 
+                    'Content-Disposition':
+                        response.headers.get('content-disposition') ||
                         `attachment; filename="${type.toLowerCase()}_export.csv"`,
                 },
             });
@@ -95,7 +98,9 @@ export async function POST(request: NextRequest) {
         });
 
         if (!response.ok) {
-            const error = await response.json().catch(() => ({ error: 'Backend request failed' }));
+            const error = await response
+                .json()
+                .catch(() => ({ error: 'Backend request failed' }));
             return NextResponse.json(error, { status: response.status });
         }
 
@@ -132,7 +137,9 @@ export async function PUT(request: NextRequest) {
         });
 
         if (!response.ok) {
-            const error = await response.json().catch(() => ({ error: 'Backend request failed' }));
+            const error = await response
+                .json()
+                .catch(() => ({ error: 'Backend request failed' }));
             return NextResponse.json(error, { status: response.status });
         }
 
@@ -169,7 +176,9 @@ export async function DELETE(request: NextRequest) {
         });
 
         if (!response.ok) {
-            const error = await response.json().catch(() => ({ error: 'Backend request failed' }));
+            const error = await response
+                .json()
+                .catch(() => ({ error: 'Backend request failed' }));
             return NextResponse.json(error, { status: response.status });
         }
 

@@ -29,7 +29,9 @@ export async function POST(request: NextRequest) {
         // Check file size and warn for large files
         const fileSizeMB = file.size / (1024 * 1024);
         if (fileSizeMB > 25) {
-            console.warn(`⚠️ Large file detected: ${fileSizeMB.toFixed(2)}MB - expect longer processing time`);
+            console.warn(
+                `⚠️ Large file detected: ${fileSizeMB.toFixed(2)}MB - expect longer processing time`,
+            );
         }
 
         console.log('Backend URL:', BACKEND_URL);
@@ -42,12 +44,15 @@ export async function POST(request: NextRequest) {
 
         // Call the backend PDF split endpoint with extended timeout for large files
         const timeoutMs = fileSizeMB > 25 ? 180000 : 120000; // 3min for large files, 2min for normal
-        
-        const backendResponse = await fetch(`${BACKEND_URL}/processing/split-pdf/`, {
-            method: 'POST',
-            body: backendFormData,
-            signal: AbortSignal.timeout(timeoutMs),
-        });
+
+        const backendResponse = await fetch(
+            `${BACKEND_URL}/processing/split-pdf/`,
+            {
+                method: 'POST',
+                body: backendFormData,
+                signal: AbortSignal.timeout(timeoutMs),
+            },
+        );
 
         console.log('Backend response status:', backendResponse.status);
 
@@ -72,35 +77,39 @@ export async function POST(request: NextRequest) {
         console.log(`PDF split successfully: ${result.totalPages} pages`);
 
         // Transform backend response to match frontend PageData interface
-        const transformedPages = result.pages?.map((page: any) => {
-            // Ensure the imageUrl is a full URL (add backend URL if it's a relative path)
-            let fullImageUrl = page.imageUrl;
-            if (page.imageUrl && page.imageUrl.startsWith('/')) {
-                fullImageUrl = `${BACKEND_URL}${page.imageUrl}`;
-            }
-            
-            return {
-                pageNumber: page.pageNumber,
-                fileName: page.filename || `page_${page.pageNumber}.jpg`,
-                mimeType: 'image/jpeg',
-                imageDataUrl: fullImageUrl, // Full URL to backend media file
-                bufferSize: 0, // Not available from backend response
-                status: 'idle' as const,
-                extractedData: null,
-                error: null,
-                retryCount: 0
-            };
-        }) || [];
+        const transformedPages =
+            result.pages?.map((page: any) => {
+                // Ensure the imageUrl is a full URL (add backend URL if it's a relative path)
+                let fullImageUrl = page.imageUrl;
+                if (page.imageUrl && page.imageUrl.startsWith('/')) {
+                    fullImageUrl = `${BACKEND_URL}${page.imageUrl}`;
+                }
 
-        console.log('Transformed pages:', transformedPages.map((p: any) => ({
-            pageNumber: p.pageNumber,
-            imageDataUrl: p.imageDataUrl,
-            fileName: p.fileName
-        })));
+                return {
+                    pageNumber: page.pageNumber,
+                    fileName: page.filename || `page_${page.pageNumber}.jpg`,
+                    mimeType: 'image/jpeg',
+                    imageDataUrl: fullImageUrl, // Full URL to backend media file
+                    bufferSize: 0, // Not available from backend response
+                    status: 'idle' as const,
+                    extractedData: null,
+                    error: null,
+                    retryCount: 0,
+                };
+            }) || [];
+
+        console.log(
+            'Transformed pages:',
+            transformedPages.map((p: any) => ({
+                pageNumber: p.pageNumber,
+                imageDataUrl: p.imageDataUrl,
+                fileName: p.fileName,
+            })),
+        );
 
         return NextResponse.json({
             ...result,
-            pages: transformedPages
+            pages: transformedPages,
         });
     } catch (error) {
         console.error('Error splitting PDF:', error);
