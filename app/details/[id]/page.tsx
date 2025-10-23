@@ -1,7 +1,7 @@
 'use client';
 
 import DocumentDetailsModal from '@/components/DocumentDetailsModal';
-import { GenericDocument } from '@/models/Document';
+import { GenericDocument } from '@/types/document';
 import { ArrowLeft } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';

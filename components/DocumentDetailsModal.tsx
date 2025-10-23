@@ -1,6 +1,6 @@
 'use client';
 
-import { GenericDocument } from '@/models/Document';
+import { GenericDocument } from '@/types/document';
 import { Download, RotateCw, X, ZoomIn, ZoomOut } from 'lucide-react';
 import React, { useState } from 'react';
 import { KosuTable, NPTTable, RebutTable } from './TableRenderers';

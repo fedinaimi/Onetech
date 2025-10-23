@@ -1,23 +1,8 @@
 'use server';
 
 import { NextRequest, NextResponse } from 'next/server';
-import mongoose from 'mongoose';
-import { RebutModel, NPTModel, KosuModel } from '@/models/Document';
 
-const MONGODB_URI = process.env.MONGODB_URI || '';
-
-async function connectToDatabase() {
-    if (mongoose.connections[0].readyState) {
-        return;
-    }
-
-    try {
-        await mongoose.connect(MONGODB_URI);
-    } catch (error) {
-        console.error('Database connection error:', error);
-        throw error;
-    }
-}
+const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://127.0.0.1:8000';
 
 // Type definitions for export data
 type CommonExportData = {
@@ -141,39 +126,29 @@ export async function GET(
     { params }: { params: Promise<{ id: string }> },
 ) {
     try {
-        await connectToDatabase();
-
         const { searchParams } = new URL(request.url);
         const format = searchParams.get('format') || 'json';
         const resolvedParams = await params;
         const documentId = resolvedParams.id;
 
-        // Try to find the document in each collection
+        // Try to find the document by searching in backend
         let document = null;
         let documentType = '';
 
-        try {
-            document = await RebutModel.findById(documentId);
-            if (document) documentType = 'Rebut';
-        } catch {
-            // Document not found in Rebut collection
-        }
-
-        if (!document) {
+        // Try each document type
+        const types = ['Rebut', 'NPT', 'Kosu'];
+        for (const type of types) {
             try {
-                document = await NPTModel.findById(documentId);
-                if (document) documentType = 'NPT';
+                const response = await fetch(
+                    `${BACKEND_URL}/documents/${documentId}/?type=${type}`
+                );
+                if (response.ok) {
+                    document = await response.json();
+                    documentType = type;
+                    break;
+                }
             } catch {
-                // Document not found in NPT collection
-            }
-        }
-
-        if (!document) {
-            try {
-                document = await KosuModel.findById(documentId);
-                if (document) documentType = 'Kosu';
-            } catch {
-                // Document not found in Kosu collection
+                // Continue trying other types
             }
         }
 

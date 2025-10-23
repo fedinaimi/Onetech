@@ -3,7 +3,7 @@
 import DocumentList from '@/components/DocumentList';
 import DocumentVerificationModal from '@/components/DocumentVerificationModal';
 import HeaderBar from '@/components/HeaderBar';
-import ImageProcessor from '@/components/ImageProcessor';
+
 import PageProcessor from '@/components/PageProcessor';
 import { KosuTable, NPTTable, RebutTable } from '@/components/TableRenderers';
 import axios from 'axios';
@@ -118,10 +118,7 @@ export default function HomePage() {
     const [renameValue, setRenameValue] = useState('');
     const [processingPages, setProcessingPages] = useState<PageData[]>([]);
     const [isProcessingPDF, setIsProcessingPDF] = useState(false);
-    const [processingImage, setProcessingImage] = useState<ImageData | null>(
-        null,
-    );
-    const [isProcessingImage, setIsProcessingImage] = useState(false);
+    // Removed separate image processing states - now using unified backend processing
     const [isUploading, setIsUploading] = useState(false);
     const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -150,9 +147,67 @@ export default function HomePage() {
         }
     }, []);
 
-    // Load persisted processing state on mount
+    // Enhanced cleanup function to prevent stuck states
+    const cleanupStuckSessions = useCallback(() => {
+        try {
+            if (typeof window === 'undefined') return;
+            
+            // Check for old batch sessions
+            const batchSession = JSON.parse(localStorage.getItem('batch-session') || '{}');
+            if (batchSession.sessionId) {
+                const sessionAge = Date.now() - (batchSession.timestamp || 0);
+                if (sessionAge > 3600000) { // 1 hour - keep sessions longer for reload persistence
+                    console.log('🗑️ Clearing expired batch session:', batchSession.sessionId);
+                    localStorage.removeItem('batch-session');
+                }
+            }
+            
+            // Clean up processing state if too old
+            const processingState = localStorage.getItem('processing-state');
+            if (processingState) {
+                const parsed = JSON.parse(processingState);
+                const stateAge = Date.now() - (parsed.timestamp || 0);
+                if (stateAge > 3600000) { // 1 hour - keep processing state longer for reload persistence
+                    console.log('🗑️ Clearing expired processing state');
+                    localStorage.removeItem('processing-state');
+                }
+            }
+        } catch (error) {
+            console.error('Error cleaning up stuck sessions:', error);
+            // If there's any error, clear everything to be safe
+            if (typeof window !== 'undefined') {
+                localStorage.removeItem('batch-session');
+                localStorage.removeItem('processing-state');
+                localStorage.removeItem('processing-state-minimal');
+            }
+        }
+    }, []);
+
+    // Force reset all processing states - use when completely stuck
+    const forceResetAllStates = useCallback(() => {
+        console.log('🚨 FORCE RESET: Clearing all states and stopping all processing');
+        
+        // Stop any processing
+        setIsProcessingPDF(false);
+        setProcessingPages([]);
+        setUploadingFiles([]);
+        
+        // Clear all storage
+        if (typeof window !== 'undefined') {
+            localStorage.clear();
+            sessionStorage.clear();
+        }
+        
+        // Force page reload to ensure clean state
+        if (typeof window !== 'undefined') {
+            window.location.reload();
+        }
+    }, []);    // Load persisted processing state on mount
     const loadPersistedProcessingState = useCallback(() => {
         try {
+            // First clean up any stuck sessions
+            cleanupStuckSessions();
+            
             const savedState = localStorage.getItem('processing-state');
             if (savedState) {
                 const {
@@ -215,7 +270,7 @@ export default function HomePage() {
             localStorage.removeItem('processing-state');
             localStorage.removeItem('processing-state-minimal');
         }
-    }, [selectedType]);
+    }, [selectedType, cleanupStuckSessions]);
 
     // Enhanced session storage for PDF data persistence
     const savePDFSession = useCallback(
@@ -330,67 +385,7 @@ export default function HomePage() {
         [selectedType],
     );
 
-    // Load persisted image processing state on mount
-    const loadPersistedImageProcessingState = useCallback(() => {
-        try {
-            const savedState = localStorage.getItem('image-processing-state');
-            if (savedState) {
-                const {
-                    imageData,
-                    isProcessing,
-                    documentType: savedType,
-                } = JSON.parse(savedState);
-
-                // Only restore if processing was incomplete and matches current document type
-                if (
-                    imageData &&
-                    imageData.status !== 'completed' &&
-                    savedType === selectedType
-                ) {
-                    console.log(
-                        'Restoring image processing state:',
-                        imageData.fileName,
-                    );
-                    setProcessingImage(imageData);
-                    setIsProcessingImage(isProcessing);
-                } else {
-                    // Clear completed or mismatched processing state
-                    localStorage.removeItem('image-processing-state');
-                }
-            }
-        } catch (error) {
-            console.error(
-                'Error loading persisted image processing state:',
-                error,
-            );
-            localStorage.removeItem('image-processing-state');
-        }
-    }, [selectedType]);
-
-    // Save image processing state to localStorage
-    const saveImageProcessingState = useCallback(
-        (imageData: ImageData | null, isProcessing: boolean) => {
-            try {
-                if (imageData) {
-                    const state = {
-                        imageData,
-                        isProcessing,
-                        documentType: selectedType,
-                        timestamp: Date.now(),
-                    };
-                    localStorage.setItem(
-                        'image-processing-state',
-                        JSON.stringify(state),
-                    );
-                } else {
-                    localStorage.removeItem('image-processing-state');
-                }
-            } catch (error) {
-                console.error('Error saving image processing state:', error);
-            }
-        },
-        [selectedType],
-    );
+    // Removed image processing state persistence - now using unified backend processing
 
     const loadDocumentCounts = useCallback(async () => {
         try {
@@ -422,7 +417,17 @@ export default function HomePage() {
         }
     }, []);
 
+    // Add throttling to prevent excessive API calls
+    const lastLoadTime = useRef<number>(0);
     const loadDocuments = useCallback(async () => {
+        // Throttle: Don't load more than once every 2 seconds
+        const now = Date.now();
+        if (now - lastLoadTime.current < 2000) {
+            console.log('🔄 Throttling loadDocuments call - too frequent');
+            return;
+        }
+        lastLoadTime.current = now;
+        
         setIsLoading(true);
         try {
             const response = await axios.get(
@@ -444,15 +449,19 @@ export default function HomePage() {
 
     // Load documents and counts when component mounts or type changes
     React.useEffect(() => {
+        // Clean up only stuck sessions, but preserve valid ones for reload persistence
+        cleanupStuckSessions(); // This now uses 1-hour timeout instead of clearing everything
+        
         loadDocuments();
         loadDocumentCounts(); // Load all counts
-        loadPersistedProcessingState(); // Load any persisted processing state
-        loadPersistedImageProcessingState(); // Load any persisted image processing state
+        loadPersistedProcessingState(); // Re-enabled for reload persistence
+        loadPDFSession(); // Re-enabled for PDF session persistence
     }, [
         loadDocuments,
         loadDocumentCounts,
         loadPersistedProcessingState,
-        loadPersistedImageProcessingState,
+        loadPDFSession,
+        cleanupStuckSessions,
     ]);
 
     // Save processing state when user is about to leave/refresh
@@ -469,9 +478,7 @@ export default function HomePage() {
                 );
             }
 
-            if (processingImage && isProcessingImage) {
-                saveImageProcessingState(processingImage, isProcessingImage);
-            }
+            // Removed image processing state saving - using unified backend processing
         };
 
         window.addEventListener('beforeunload', handleBeforeUnload);
@@ -481,17 +488,9 @@ export default function HomePage() {
         processingPages,
         isProcessingPDF,
         saveProcessingState,
-        processingImage,
-        isProcessingImage,
-        saveImageProcessingState,
     ]);
 
-    // Save image processing state when it changes
-    React.useEffect(() => {
-        if (processingImage && isProcessingImage) {
-            saveImageProcessingState(processingImage, isProcessingImage);
-        }
-    }, [processingImage, isProcessingImage, saveImageProcessingState]);
+    // Removed image processing state saving - now using unified backend processing
 
     // Update page title to show processing status
     React.useEffect(() => {
@@ -501,13 +500,11 @@ export default function HomePage() {
             const completed = processingPages.filter(p => p.status === 'completed').length;
             const total = processingPages.length;
             const percentage = Math.round((completed / total) * 100);
-            document.title = `Processing PDF... ${percentage}% (${completed}/${total}) - OneTech`;
-        } else if (isProcessingImage) {
-            document.title = 'Processing Image... - OneTech';
+            document.title = `Processing... ${percentage}% (${completed}/${total}) - OneTech`;
         } else {
             document.title = 'OneTech - Document Extractor';
         }
-    }, [isProcessingPDF, isProcessingImage, processingPages]);
+    }, [isProcessingPDF, processingPages]);
 
     // Enhanced session recovery with cross-tab synchronization
     React.useEffect(() => {
@@ -516,7 +513,7 @@ export default function HomePage() {
         
         const timer = setTimeout(() => {
             try {
-                loadPersistedProcessingState();
+                // TEMPORARILY DISABLED - loadPersistedProcessingState();
                 const pdfSession = loadPDFSession();
                 
                 if (pdfSession) {
@@ -553,79 +550,70 @@ export default function HomePage() {
 
     const handleImageUpload = useCallback(
         async (file: File) => {
-            setIsProcessingImage(true);
-            setProcessingImage(null);
+            setIsProcessingPDF(true); // Use PDF processing state for consistency
+            setProcessingPages([]);
 
             try {
-                // Create image data URL for visualization
-                const reader = new FileReader();
-                reader.onload = e => {
-                    const imageDataUrl = e.target?.result as string;
+                // Use the same backend batch processing API for images
+                const formData = new FormData();
+                formData.append('file', file);
+                formData.append('documentType', selectedType);
 
-                    const imageData: ImageData = {
+                console.log('Starting backend processing for image:', file.name);
+                const batchResponse = await axios.post(
+                    '/api/start-batch-processing',
+                    formData,
+                    {
+                        headers: { 'Content-Type': 'multipart/form-data' },
+                    },
+                );
+
+                if (batchResponse.data.success) {
+                    const sessionId = batchResponse.data.sessionId;
+                    const status = batchResponse.data.status;
+                    
+                    console.log(`Backend batch processing started for image with session: ${sessionId}`);
+                    
+                    // Create page data structure for single image
+                    const pages: PageData[] = [{
+                        pageNumber: 1,
                         fileName: file.name,
                         mimeType: file.type,
-                        imageDataUrl,
-                        fileSize: file.size,
+                        imageDataUrl: '', // Will be filled by backend
+                        bufferSize: file.size,
                         status: 'pending',
                         extractedData: null,
                         error: null,
-                    };
+                    }];
+                    
+                    setProcessingPages(pages);
+                    
+                    // Store session info for PageProcessor polling
+                    if (typeof window !== 'undefined') {
+                        localStorage.setItem('batch-session', JSON.stringify({
+                            sessionId: sessionId,
+                            timestamp: Date.now(),
+                            originalFileName: file.name,
+                            documentType: selectedType,
+                            totalPages: 1
+                        }));
+                    }
 
-                    setProcessingImage(imageData);
-                    // Save initial processing state to localStorage
-                    saveImageProcessingState(imageData, true);
-                };
-                reader.readAsDataURL(file);
+                    // Save processing state
+                    saveProcessingState(pages, true, file.name);
+                } else {
+                    throw new Error(batchResponse.data.error || 'Failed to start backend processing');
+                }
             } catch (error) {
-                console.error('Error preparing image for processing:', error);
-                setIsProcessingImage(false);
+                console.error('Error starting image processing:', error);
+                setIsProcessingPDF(false);
+                alert(error instanceof Error ? error.message : 'Failed to start processing');
             }
         },
-        [saveImageProcessingState],
+        [selectedType, saveProcessingState],
     );
 
-    const handleImageProcessComplete = useCallback(async () => {
-        try {
-            // The document is already saved by the process-page API
-            // Just refresh the document list and update counts
-            console.log('Image processing completed, refreshing document list');
-
-            await loadDocuments();
-            await loadDocumentCounts();
-
-            // Clear processing state and localStorage after a delay
-            setTimeout(() => {
-                setIsProcessingImage(false);
-                setProcessingImage(null);
-                saveImageProcessingState(null, false);
-            }, 2000);
-        } catch (error) {
-            console.error(
-                'Error refreshing documents after image processing:',
-                error,
-            );
-            // Handle error by clearing the processing state
-            setTimeout(() => {
-                setIsProcessingImage(false);
-                setProcessingImage(null);
-                saveImageProcessingState(null, false);
-            }, 5000);
-        }
-    }, [loadDocuments, loadDocumentCounts, saveImageProcessingState]);
-
-    const handleImageProcessError = useCallback(
-        (error: string) => {
-            console.error('Image processing error:', error);
-            // Keep the error state visible for a few seconds, then clear
-            setTimeout(() => {
-                setIsProcessingImage(false);
-                setProcessingImage(null);
-                saveImageProcessingState(null, false);
-            }, 5000);
-        },
-        [saveImageProcessingState],
-    );
+    // Removed image processing handlers - now using unified backend processing
 
     const handleRegularFileUpload = useCallback(
         async (file: File) => {
@@ -748,41 +736,73 @@ export default function HomePage() {
             setProcessingPages([]);
 
             try {
-                // Step 1: Split PDF into pages
+                // Step 1: Start backend batch processing
                 const formData = new FormData();
                 formData.append('file', file);
+                formData.append('documentType', selectedType);
 
-                console.log('Splitting PDF:', file.name);
-                const splitResponse = await axios.post(
-                    '/api/split-pdf',
+                console.log('Starting backend batch processing for PDF:', file.name);
+                const batchResponse = await axios.post(
+                    '/api/start-batch-processing',
                     formData,
                     {
                         headers: { 'Content-Type': 'multipart/form-data' },
-                        // No timeout - rely on backend response
                     },
                 );
 
-                if (splitResponse.data.success) {
-                    const pages: PageData[] = splitResponse.data.pages;
-                    console.log(`PDF split into ${pages.length} pages`);
+                if (batchResponse.data.success) {
+                    const sessionId = batchResponse.data.sessionId;
+                    const status = batchResponse.data.status;
+                    
+                    console.log(`Backend batch processing started with session: ${sessionId}`);
+                    
+                    // Create page data structure from the status for the UI
+                    const pages: PageData[] = Array.from(
+                        { length: status.total_pages },
+                        (_, index) => ({
+                            pageNumber: index + 1,
+                            fileName: `${file.name.split('.')[0]}-page-${index + 1}.jpg`,
+                            mimeType: 'image/jpeg',
+                            imageDataUrl: '', // Will be populated later if needed
+                            bufferSize: 0,
+                            status: 'pending' as const,
+                            extractedData: null,
+                            error: null,
+                        })
+                    );
+                    
                     setProcessingPages(pages);
-
-                    // Save PDF session and processing state
-                    savePDFSession(file, pages, selectedType);
+                    
+                    // Store session ID for polling
+                    const pdfSession = {
+                        sessionId,
+                        originalFileName: file.name,
+                        fileSize: file.size,
+                        fileType: file.type,
+                        documentType: selectedType,
+                        pageCount: status.total_pages,
+                        timestamp: Date.now(),
+                    };
+                    
+                    if (typeof window !== 'undefined') {
+                        localStorage.setItem('batch-session', JSON.stringify(pdfSession));
+                    }
+                    
+                    // Save processing state
                     saveProcessingState(pages, true, file.name);
                 } else {
                     throw new Error(
-                        splitResponse.data.error || 'Failed to split PDF',
+                        batchResponse.data.error || 'Failed to start batch processing',
                     );
                 }
             } catch (error) {
-                console.error('Error splitting PDF:', error);
+                console.error('Error starting batch processing:', error);
                 setIsProcessingPDF(false);
                 // Fall back to old approach for this file
                 await handleRegularFileUpload(file);
             }
         },
-        [handleRegularFileUpload, saveProcessingState],
+        [selectedType, handleRegularFileUpload, saveProcessingState],
     );
 
     const handleSingleFileUpload = useCallback(
@@ -876,10 +896,9 @@ export default function HomePage() {
         // Clear processing state from localStorage
         localStorage.removeItem('processing-state');
 
-        // Refresh the documents list to make sure we have the latest data
-        loadDocuments();
-        loadDocumentCounts();
-    }, [loadDocuments, loadDocumentCounts]);
+        // No need to refresh documents - they're already updated via onPageComplete
+        console.log('Processing complete - documents already updated via page completion callbacks');
+    }, []);
 
     const handleCellEdit = async (
         docId: string,
@@ -1234,17 +1253,10 @@ export default function HomePage() {
                                             Resume Processing
                                         </button>
                                         <button
-                                            onClick={() => {
-                                                if (typeof window !== 'undefined') {
-                                                    sessionStorage.removeItem('pdf-session');
-                                                    localStorage.removeItem('processing-state');
-                                                }
-                                                setProcessingPages([]);
-                                                console.log('🗑️ Cleared processing session');
-                                            }}
-                                            className="bg-gray-500 hover:bg-gray-600 text-white text-sm px-3 py-1 rounded transition-colors"
+                                            onClick={forceResetAllStates}
+                                            className="bg-red-500 hover:bg-red-600 text-white text-sm px-3 py-1 rounded transition-colors"
                                         >
-                                            Clear Session
+                                            Force Reset All
                                         </button>
                                     </div>
                                 </div>
@@ -1255,43 +1267,7 @@ export default function HomePage() {
                 return null;
             })()}
 
-            {/* Floating Processing Indicator - Always visible when processing */}
-            {(isProcessingPDF || isProcessingImage) && (
-                <div className="fixed top-4 right-4 z-50 bg-white rounded-lg shadow-lg border border-gray-200 p-4 max-w-sm">
-                    <div className="flex items-center space-x-3">
-                        <div className="flex-shrink-0">
-                            <Loader2 className="h-5 w-5 text-blue-600 animate-spin" />
-                        </div>
-                        <div className="flex-1 min-w-0">
-                            <div className="text-sm font-medium text-gray-900">
-                                {isProcessingPDF ? 'Processing PDF' : 'Processing Image'}
-                            </div>
-                            {isProcessingPDF && (
-                                <div className="text-xs text-gray-500">
-                                    {(() => {
-                                        const completed = processingPages.filter(p => p.status === 'completed').length;
-                                        const total = processingPages.length;
-                                        const percentage = total > 0 ? Math.round((completed / total) * 100) : 0;
-                                        return `${completed}/${total} pages (${percentage}%)`;
-                                    })()}
-                                </div>
-                            )}
-                        </div>
-                        <button
-                            onClick={() => {
-                                // Show processing view - scroll to processing section
-                                const processingElement = document.getElementById('processing-section');
-                                if (processingElement) {
-                                    processingElement.scrollIntoView({ behavior: 'smooth' });
-                                }
-                            }}
-                            className="flex-shrink-0 text-blue-600 hover:text-blue-800 text-xs font-medium"
-                        >
-                            View Details
-                        </button>
-                    </div>
-                </div>
-            )}
+
 
             <div className="max-w-7xl mx-auto px-3 sm:px-4 md:px-6 lg:px-8 py-3 sm:py-4 md:py-6 lg:py-8">
                 {/* Title */}
@@ -1384,7 +1360,6 @@ export default function HomePage() {
                                         f => f.status === 'uploading',
                                     ) ||
                                     isProcessingPDF ||
-                                    isProcessingImage ||
                                     isUploading
                                 }
                                 className="bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white px-3 sm:px-4 py-2 sm:py-3 rounded-lg 
@@ -1395,22 +1370,18 @@ export default function HomePage() {
                                     f => f.status === 'uploading',
                                 ) ||
                                 isProcessingPDF ||
-                                isProcessingImage ||
                                 isUploading ? (
                                     <>
                                         <Loader2 className="h-4 w-4 sm:h-5 sm:w-5 flex-shrink-0 animate-spin" />
                                         <span className="hidden sm:inline">
                                             {isProcessingPDF
-                                                ? 'Processing PDF...'
-                                                : isProcessingImage
-                                                  ? 'Processing Image...'
-                                                  : isUploading
+                                                ? 'Processing...'
+                                                : isUploading
                                                     ? 'Preparing files...'
                                                     : 'Uploading...'}
                                         </span>
                                         <span className="sm:hidden">
-                                            {isProcessingPDF ||
-                                            isProcessingImage
+                                            {isProcessingPDF
                                                 ? 'Processing...'
                                                 : isUploading
                                                   ? 'Preparing...'
@@ -1606,16 +1577,7 @@ export default function HomePage() {
                     </div>
                 )}
 
-                {/* Image Processing Component */}
-                {isProcessingImage && processingImage && (
-                    <ImageProcessor
-                        imageData={processingImage}
-                        documentType={selectedType}
-                        originalFileName={processingImage.fileName}
-                        onComplete={handleImageProcessComplete}
-                        onError={handleImageProcessError}
-                    />
-                )}
+
 
                 {/* Documents List */}
                 <DocumentList

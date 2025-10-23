@@ -2,9 +2,8 @@ import {
     AlertCircle,
     CheckCircle,
     Clock,
-    Eye,
     Loader2,
-    Zap,
+    Zap
 } from 'lucide-react';
 import Image from 'next/image';
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -20,7 +19,7 @@ interface PageData {
     status: PageStatus;
     extractedData: any;
     error: string | null;
-    retryCount?: number; // Track how many times this page has been retried
+    retryCount?: number;
 }
 
 interface PageProcessorProps {
@@ -38,257 +37,409 @@ export default function PageProcessor({
     onPageComplete,
     onAllComplete,
 }: PageProcessorProps) {
-    const [processingPages, setProcessingPages] = useState<PageData[]>(pages);
+    // Debug: Log incoming page data
+    console.log('[PageProcessor] Component loaded with pages:', pages.map(p => ({
+        pageNumber: p.pageNumber,
+        hasImageUrl: !!p.imageDataUrl,
+        imageUrl: p.imageDataUrl?.substring(0, 80) || 'NO URL',
+        fileName: p.fileName
+    })));
+
+    // Fix relative URLs by adding backend URL prefix
+    const fixedImageUrls = pages.map(p => {
+        if (p.imageDataUrl && p.imageDataUrl.startsWith('/media/')) {
+            // Convert relative URL to absolute URL
+            return `http://127.0.0.1:8000${p.imageDataUrl}`;
+        }
+        return p.imageDataUrl;
+    });
+    
+    const [processingPages, setProcessingPages] = useState<PageData[]>([]);
     const [selectedPage, setSelectedPage] = useState<PageData | null>(null);
-    useState<string>('');
-    const [startTime, setStartTime] = useState<number>(0);
-    const processingStarted = useRef(false);
-    const [concurrentProcessing, setConcurrentProcessing] = useState(0); // Track if processing has started
+    const [backendSessionId, setBackendSessionId] = useState<string | null>(null);
+    const pollingIntervalRef = useRef<NodeJS.Timeout | null>(null);
+    const currentPollingSessionRef = useRef<string | null>(null);
+    const [isInitialized, setIsInitialized] = useState(false);
 
-    const processPage = useCallback(
-        async (page: PageData) => {
-            // Check if this page is already being processed or completed
-            const currentPageState = processingPages.find(
-                p => p.pageNumber === page.pageNumber,
-            );
-            if (
-                currentPageState &&
-                (currentPageState.status === 'processing' ||
-                    currentPageState.status === 'completed')
-            ) {
-                console.log(
-                    `Page ${page.pageNumber} is already ${currentPageState.status}, skipping...`,
-                );
-                return;
-            }
+    // Stop all polling activity
+    const stopPolling = useCallback(() => {
+        console.log('Stopping all polling activity');
+        if (pollingIntervalRef.current) {
+            clearInterval(pollingIntervalRef.current);
+            pollingIntervalRef.current = null;
+        }
+        currentPollingSessionRef.current = null;
+    }, []);
 
-            console.log(`🔄 Starting to process page ${page.pageNumber}`);
+    // Backend status polling function
+    const startBackendStatusPolling = useCallback((sessionId: string) => {
+                console.log('Starting backend status polling for session:', sessionId);        // Stop any existing polling first
+        stopPolling();
+        
+        // Check if we're already polling this session
+        if (currentPollingSessionRef.current === sessionId) {
+            console.log('Already polling this session, skipping');
+            return;
+        }
+        
+        // Set current session
+        setBackendSessionId(sessionId);
+        currentPollingSessionRef.current = sessionId;
+        
+        // Set maximum polling duration (10 minutes)
+        const maxPollingDuration = 600000; // 10 minutes  
+        const pollingStartTime = Date.now();
 
-            // Track concurrent processing
-            setConcurrentProcessing(prev => prev + 1);
-
-            // Update status to processing
-            setProcessingPages(prev =>
-                prev.map(p =>
-                    p.pageNumber === page.pageNumber
-                        ? { ...p, status: 'processing' as const }
-                        : p,
-                ),
-            );
-
+        const pollStatus = async () => {
             try {
-                // Use imageDataUrl directly since it comes from backend split
-                const response = await fetch('/api/process-page', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({
-                        imageDataUrl: page.imageDataUrl, // Send the complete data URL
-                        fileName: page.fileName,
-                        mimeType: page.mimeType,
-                        documentType,
-                        originalFileName,
-                        pageNumber: page.pageNumber,
-                    }),
-                    // Increase timeout to match backend retry logic (up to ~12 minutes total)
-                    // 3 attempts: 3min + 4min + 5min = ~12 minutes + safety buffer
-                    signal: AbortSignal.timeout(15 * 60 * 1000), // 15 minutes timeout
+                // Check if this session is still the current one
+                if (currentPollingSessionRef.current !== sessionId) {
+                    console.log('Session changed, stopping polling for:', sessionId);
+                    if (pollingIntervalRef.current) {
+                        clearInterval(pollingIntervalRef.current);
+                        pollingIntervalRef.current = null;
+                    }
+                    return;
+                }
+                
+                console.log('Polling backend status for session:', sessionId);
+                const response = await fetch(`/api/batch-status/${sessionId}`);
+                
+                if (!response.ok) {
+                    if (response.status === 404) {
+                        console.log('Session not found (404), stopping polling');
+                        stopPolling();
+                        if (typeof window !== 'undefined') {
+                            localStorage.removeItem('batch-session');
+                        }
+                        setTimeout(() => {
+                            onAllComplete();
+                        }, 1000);
+                        return;
+                    }
+                    throw new Error(`HTTP ${response.status}`);
+                }
+
+                const status = await response.json();
+                console.log('Backend status:', {
+                    completed: status.completed_pages,
+                    processing: status.processing_pages?.length || 0,
+                    failed: status.failed_pages,
+                    total: status.total_pages,
+                    status: status.status
                 });
 
-                const result = await response.json();
-
-                if (result.success) {
-                    console.log(
-                        `Page ${page.pageNumber} processed successfully`,
-                    );
-                    // Update status to completed immediately on success
-                    setProcessingPages(prev =>
-                        prev.map(p =>
-                            p.pageNumber === page.pageNumber
-                                ? {
-                                      ...p,
-                                      status: 'completed' as const,
-                                      extractedData: result.extractedData,
-                                      error: null,
-                                  }
-                                : p,
-                        ),
-                    );
-
-                    // Notify parent of completion
-                    onPageComplete(page.pageNumber, result.extractedData);
-                } else {
-                    console.log(
-                        `Page ${page.pageNumber} processing failed:`,
-                        result.error,
-                    );
-                    // Update status to error immediately on failure
-                    setProcessingPages(prev =>
-                        prev.map(p =>
-                            p.pageNumber === page.pageNumber
-                                ? {
-                                      ...p,
-                                      status: 'error' as const,
-                                      error: result.error,
-                                  }
-                                : p,
-                        ),
-                    );
+                // Detect stale sessions (no progress for too long)
+                const currentTime = Date.now();
+                const batchSession = JSON.parse(localStorage.getItem('batch-session') || '{}');
+                
+                if (status.completed_pages === 0 && status.failed_pages === 0 && status.status === 'processing') {
+                    const sessionAge = currentTime - (batchSession.timestamp || 0);
+                    if (sessionAge > 120000) { // 2 minutes instead of 3 to be more aggressive
+                        console.log('Stale session detected (no progress for 2+ minutes), stopping polling');
+                        stopPolling();
+                        if (typeof window !== 'undefined') {
+                            localStorage.removeItem('batch-session');
+                        }
+                        setTimeout(() => {
+                            onAllComplete();
+                        }, 1000);
+                        return;
+                    }
                 }
-            } catch (error) {
-                console.error(
-                    `❌ Error processing page ${page.pageNumber}:`,
-                    error,
-                );
-                setProcessingPages(prev =>
-                    prev.map(p =>
-                        p.pageNumber === page.pageNumber
-                            ? {
-                                  ...p,
-                                  status: 'error' as const,
-                                  error:
-                                      error instanceof Error
-                                          ? error.message
-                                          : 'Unknown error',
-                              }
-                            : p,
-                    ),
-                );
-            } finally {
-                // Always decrease concurrent counter
-                setConcurrentProcessing(prev => Math.max(0, prev - 1));
-            }
-        },
-        [processingPages, documentType, originalFileName, onPageComplete],
-    );
-
-    // Function to retry failed pages
-    const retryFailedPages = () => {
-        const failedPages = processingPages.filter(p => p.status === 'error');
-        console.log(`Retrying ${failedPages.length} failed pages...`);
-
-        failedPages.forEach(page => {
-            // Reset the page status to pending and increment retry count
-            setProcessingPages(prev =>
-                prev.map(p =>
-                    p.pageNumber === page.pageNumber
-                        ? {
-                              ...p,
-                              status: 'pending' as const,
-                              error: null,
-                              retryCount: (p.retryCount || 0) + 1,
-                          }
-                        : p,
-                ),
-            );
-
-            // Process the page again
-            setTimeout(() => processPage(page), 500); // Small delay to avoid overwhelming the API
-        });
-    };
-
-    // Calculate overall progress and time estimation
-    useEffect(() => {
-        const completedCount = processingPages.filter(
-            p => p.status === 'completed',
-        ).length;
-        const totalCount = processingPages.length;
-
-        // Calculate estimated time remaining (for logging/debugging)
-        if (completedCount > 0 && completedCount < totalCount) {
-            const elapsedTime = (Date.now() - startTime) / 1000; // in seconds
-            const avgTimePerPage = elapsedTime / completedCount;
-            const remainingPages = totalCount - completedCount;
-            const estimatedSeconds = avgTimePerPage * remainingPages;
-
-            if (estimatedSeconds < 60) {
-                console.log(`⏱️ ~${Math.round(estimatedSeconds)}s remaining (${completedCount}/${totalCount} completed)`);
-            } else {
-                const minutes = Math.round(estimatedSeconds / 60);
-                console.log(`⏱️ ~${minutes}m remaining (${completedCount}/${totalCount} completed)`);
-            }
-        } else if (completedCount === totalCount && totalCount > 0) {
-            const totalTime = ((Date.now() - startTime) / 1000).toFixed(1);
-            console.log(`✅ Processing complete! Total time: ${totalTime}s for ${totalCount} pages`);
-        }
-
-        // Detect if too many pages are failing and suggest recovery
-        const failedCount = processingPages.filter(p => p.status === 'error').length;
-        if (failedCount > totalCount * 0.3 && totalCount > 10) {
-            console.warn(`⚠️ High failure rate detected: ${failedCount}/${totalCount} pages failed. Consider reducing batch size or checking backend capacity.`);
-        }
-    }, [processingPages, startTime]);
-
-    // Start processing pages in batches to prevent overwhelming the system
-    useEffect(() => {
-        if (processingStarted.current || pages.length === 0) {
-            return; // Prevent duplicate processing
-        }
-
-        processingStarted.current = true;
-        setStartTime(Date.now());
-
-        const startProcessing = async () => {
-            console.log(`🚀 Starting to process ${pages.length} pages in batches...`);
-
-            // Determine batch size based on total pages - Optimized for client server
-            const batchSize = pages.length > 30 ? 6 : pages.length > 20 ? 8 : pages.length > 10 ? 10 : 12;
-            console.log(`� Using optimized batch size: ${batchSize} for ${pages.length} pages (client server mode)`);
-
-            const processBatch = async (startIndex: number) => {
-                const endIndex = Math.min(startIndex + batchSize, pages.length);
-                const batch = pages.slice(startIndex, endIndex);
                 
-                console.log(`🔄 Processing batch ${Math.floor(startIndex / batchSize) + 1}/${Math.ceil(pages.length / batchSize)} (pages ${startIndex + 1}-${endIndex})`);
+                // Additional check: If session shows processing but no pages are actually being processed
+                if (status.status === 'processing' && 
+                    (!status.processing_pages || status.processing_pages.length === 0) &&
+                    status.completed_pages === 0 && status.failed_pages === 0) {
+                    const sessionAge = currentTime - (batchSession.timestamp || 0);
+                    if (sessionAge > 60000) { // 1 minute for completely stuck sessions
+                        console.log('Completely stuck session detected (processing but no active pages), stopping polling');
+                        stopPolling();
+                        if (typeof window !== 'undefined') {
+                            localStorage.removeItem('batch-session');
+                        }
+                        setTimeout(() => {
+                            onAllComplete();
+                        }, 1000);
+                        return;
+                    }
+                }
+
+                // Global timeout check (stop polling after max duration)
+                if (currentTime - pollingStartTime > maxPollingDuration) {
+                    console.log('Polling timeout reached (10 minutes), stopping polling');
+                    stopPolling();
+                    if (typeof window !== 'undefined') {
+                        localStorage.removeItem('batch-session');
+                    }
+                    setTimeout(() => {
+                        onAllComplete();
+                    }, 1000);
+                    return;
+                }
+
+                // Stop polling if session is completed or has no pages
+                if (status.status === 'completed' || (status.total_pages === 0 && status.status !== 'processing')) {
+                    console.log('Session completed or empty, stopping polling');
+                    stopPolling();
+                    setTimeout(() => {
+                        onAllComplete();
+                    }, 1000);
+                    return;
+                }
+
+                // Update processing pages based on backend status
+                setProcessingPages(prevPages => {
+                    return prevPages.map(page => {
+                        const pageInfo = status.pages_info?.[page.pageNumber];
+                        
+                        if (pageInfo) {
+                            return {
+                                ...page,
+                                status: pageInfo.status === 'completed' ? 'completed' as const :
+                                       pageInfo.status === 'processing' ? 'processing' as const :
+                                       pageInfo.status === 'failed' ? 'error' as const : 'pending' as const,
+                                error: pageInfo.error || null,
+                                extractedData: pageInfo.status === 'completed' ? { id: pageInfo.document_id } : null,
+                                imageDataUrl: pageInfo.image_url?.startsWith('/media/') 
+                                    ? `http://127.0.0.1:8000${pageInfo.image_url}` 
+                                    : pageInfo.image_url || page.imageDataUrl // Update image URL from backend
+                            };
+                        } else if (page.pageNumber <= (status.completed_pages + status.failed_pages)) {
+                            // Page is processed but not in pages_info - find in documents
+                            const completedDoc = status.documents?.find((doc: any) => doc.page === page.pageNumber);
+                            
+                            console.log(`📄 Updating page ${page.pageNumber} with imageUrl from doc: ${completedDoc?.imageUrl}`);
+                            return {
+                                ...page,
+                                status: completedDoc ? 'completed' as const : 'error' as const,
+                                error: completedDoc ? null : 'Processing failed',
+                                extractedData: completedDoc ? { id: completedDoc.id } : null,
+                                imageDataUrl: completedDoc?.imageUrl?.startsWith('/media/')
+                                    ? `http://127.0.0.1:8000${completedDoc.imageUrl}`
+                                    : completedDoc?.imageUrl || page.imageDataUrl // Update image URL from document
+                            };
+                        }
+                        
+                        return page;
+                    });
+                });
+
+                // Call onPageComplete for newly completed pages
+                if (status.documents && status.documents.length > 0) {
+                    const currentProcessingPages = processingPages;
+                    status.documents.forEach((doc: any) => {
+                        const currentPage = currentProcessingPages.find(p => p.pageNumber === doc.page);
+                        
+                        if (currentPage && currentPage.status !== 'completed') {
+                            console.log(`📄 Page ${doc.page} completed, adding to document list`);
+                            onPageComplete(doc.page, { 
+                                id: doc.id,
+                                data: doc.data || doc.extraction_data || {},
+                                metadata: doc.metadata || {},
+                                filename: doc.filename || `${originalFileName}_page_${doc.page}`,
+                                document_type: documentType,
+                                created_at: doc.metadata?.processed_at || new Date().toISOString(),
+                                remark: doc.remark || `${documentType} extraction complete - Page ${doc.page}`,
+                                imageUrl: doc.imageUrl || '',
+                                json_url: doc.json_url || `/api/documents/${doc.id}/export?format=json`,
+                                excel_url: doc.excel_url || `/api/documents/${doc.id}/export?format=excel`
+                            });
+                        }
+                    });
+                }
                 
-                // Process batch in parallel (smaller groups)
-                const batchPromises = batch.map(page => processPage(page));
-                
-                try {
-                    await Promise.allSettled(batchPromises);
+                // Stop polling if completed or failed
+                if (status.status === 'completed' || status.status === 'failed' || 
+                    (status.completed_pages + status.failed_pages) >= status.total_pages) {
+                    console.log('Backend processing finished:', {
+                        completed: status.completed_pages,
+                        failed: status.failed_pages,
+                        total: status.total_pages,
+                        status: status.status
+                    });
                     
-                    // Reduced delay between batches for client server performance
-                    if (endIndex < pages.length) {
-                        await new Promise(resolve => setTimeout(resolve, 300)); // Reduced from 1000ms to 300ms
-                        await processBatch(endIndex);
+                    if (pollingIntervalRef.current) {
+                        clearInterval(pollingIntervalRef.current);
+                        pollingIntervalRef.current = null;
                     }
-                } catch (error) {
-                    console.error(`Error in batch ${Math.floor(startIndex / batchSize) + 1}:`, error);
-                    // Continue with next batch even if current batch has errors
-                    if (endIndex < pages.length) {
-                        await new Promise(resolve => setTimeout(resolve, 2000)); // Longer delay on error
-                        await processBatch(endIndex);
+                    
+                    // Clear session from storage
+                    if (typeof window !== 'undefined') {
+                        localStorage.removeItem('batch-session');
                     }
+                    
+                    // Wait a moment for final document callbacks, then complete
+                    setTimeout(() => {
+                        onAllComplete();
+                    }, 1000);
                 }
-            };
-
-            try {
-                await processBatch(0);
-                console.log(`✅ Finished processing all ${pages.length} pages`);
-                onAllComplete();
+                
             } catch (error) {
-                console.error('Error in batch processing:', error);
+                console.error('Backend status polling failed:', error);
+                
+                if (error instanceof TypeError && error.message.includes('fetch failed')) {
+                    console.log('Backend unavailable, stopping polling and clearing session');
+                    stopPolling();
+                    if (typeof window !== 'undefined') {
+                        localStorage.removeItem('batch-session');
+                    }
+                    
+                    setTimeout(() => {
+                        onAllComplete();
+                    }, 2000);
+                }
             }
         };
+        
+        // Poll immediately, then every 5 seconds (further reduced frequency to prevent loops)
+        pollStatus();
+        pollingIntervalRef.current = setInterval(pollStatus, 5000);
+    }, [stopPolling]);
 
-        startProcessing();
-    }, [pages.length, onAllComplete, processPage, pages]); // Fixed dependencies
+    // Cleanup polling on unmount
+    useEffect(() => {
+        return () => {
+            stopPolling();
+        };
+    }, [stopPolling]);
 
-    const getStatusIcon = (
-        status: PageStatus,
-        isCurrentlyProcessing = false,
-    ) => {
+    // Initialize backend processing (backend mode only)
+    useEffect(() => {
+        console.log('INITIALIZING PageProcessor with', pages.length, 'pages (backend mode only)');
+        
+        // Check if we have a batch session ID
+        const batchSession = typeof window !== 'undefined' ? 
+            JSON.parse(localStorage.getItem('batch-session') || '{}') : {};
+        
+        // Validate session age - clear if older than 1 hour
+        const sessionAge = Date.now() - (batchSession.timestamp || 0);
+        const isSessionValid = batchSession.sessionId && sessionAge < 3600000; // 1 hour
+        
+        if (isSessionValid) {
+            console.log('Backend session detected:', batchSession.sessionId);
+            
+            // Verify session still exists on backend before polling
+            fetch(`/api/batch-status/${batchSession.sessionId}`)
+                .then(response => {
+                    if (response.ok) {
+                        console.log('Backend session confirmed, starting polling');
+                        initializeBackendMode(batchSession.sessionId);
+                    } else {
+                        console.log('Backend session expired/not found, clearing session');
+                        clearInvalidSession();
+                        completeProcessing();
+                    }
+                })
+                .catch(error => {
+                    console.error('Error verifying backend session:', error);
+                    clearInvalidSession();
+                    completeProcessing();
+                });
+        } else {
+            if (batchSession.sessionId) {
+                console.log('Clearing expired session:', batchSession.sessionId);
+                clearInvalidSession();
+            }
+            completeProcessing();
+        }
+        
+        // Fallback: If no session at all, initialize pages immediately to show images
+        if (!batchSession.sessionId && pages.length > 0) {
+            console.log('No session found, showing pages immediately');
+            const initialPages = pages.map(page => ({
+                ...page,
+                status: 'pending' as const,
+                extractedData: null,
+                error: null,
+                retryCount: 0
+            }));
+            setProcessingPages(initialPages);
+        }
+        
+        function initializeBackendMode(sessionId: string) {
+            console.log('Initializing backend mode with pages:', pages.map(p => ({ 
+                pageNumber: p.pageNumber, 
+                hasImageUrl: !!p.imageDataUrl,
+                imageDataUrl: p.imageDataUrl ? p.imageDataUrl.substring(0, 50) + '...' : 'No image URL'
+            })));
+            
+            const freshPages = pages.map(page => ({
+                ...page,
+                status: 'pending' as const,
+                extractedData: null,
+                error: null,
+                retryCount: 0
+            }));
+            
+            setProcessingPages(freshPages);
+            setBackendSessionId(sessionId);
+            setIsInitialized(true);
+            
+            // Start backend status polling
+            startBackendStatusPolling(sessionId);
+        }
+        
+        function clearInvalidSession() {
+            stopPolling();
+            if (typeof window !== 'undefined') {
+                localStorage.removeItem('batch-session');
+                localStorage.removeItem('processing-state');
+            }
+        }
+        
+        function completeProcessing() {
+            console.log('No valid backend session - initializing pages from props');
+            
+            // Initialize pages from props to show the images
+            const initialPages = pages.map((page, index) => ({
+                ...page,
+                status: 'pending' as const,
+                extractedData: null,
+                error: null,
+                retryCount: 0,
+                imageDataUrl: fixedImageUrls[index] || page.imageDataUrl // Use fixed URLs
+            }));
+            
+            setProcessingPages(initialPages);
+            setIsInitialized(true);
+            
+            // Complete immediately if no backend session
+            setTimeout(() => {
+                onAllComplete();
+            }, 500);
+        }
+    }, [pages, startBackendStatusPolling, onAllComplete]);
+
+    // Reset function for emergency situations
+    const forceReset = useCallback(() => {
+        console.log('Force reset triggered - stopping all polling');
+        
+        stopPolling();
+        
+        if (typeof window !== 'undefined') {
+            localStorage.removeItem('batch-session');
+            localStorage.removeItem('processing-state');
+        }
+        
+        setProcessingPages([]);
+        setBackendSessionId(null);
+        setIsInitialized(true);
+        
+        setTimeout(() => {
+            onAllComplete();
+        }, 500);
+    }, [stopPolling, onAllComplete]);
+
+    const getStatusIcon = (status: PageStatus) => {
         switch (status) {
             case 'pending':
                 return <Clock className="w-4 h-4 text-gray-400" />;
             case 'processing':
                 return (
-                    <div className="flex items-center">
+                    <div className="animate-in zoom-in duration-300">
                         <Loader2 className="w-4 h-4 text-blue-500 animate-spin" />
-                        {isCurrentlyProcessing && (
-                            <Zap className="w-3 h-3 text-yellow-500 animate-bounce ml-1" />
-                        )}
                     </div>
                 );
             case 'completed':
@@ -308,257 +459,255 @@ export default function PageProcessor({
         }
     };
 
-    const getStatusColor = (status: PageStatus) => {
-        switch (status) {
-            case 'pending':
-                return 'border-gray-300 bg-gray-50';
-            case 'processing':
-                return 'border-blue-300 bg-blue-50';
-            case 'completed':
-                return 'border-green-300 bg-green-50';
-            case 'error':
-                return 'border-red-300 bg-red-50';
-        }
-    };
-
-    const completedCount = processingPages.filter(
-        p => p.status === 'completed',
-    ).length;
+    const completedCount = processingPages.filter(p => p.status === 'completed').length;
+    const processingCount = processingPages.filter(p => p.status === 'processing').length;
     const errorCount = processingPages.filter(p => p.status === 'error').length;
-    const processingCount = processingPages.filter(
-        p => p.status === 'processing',
-    ).length;
+    const totalCount = processingPages.length;
+    const progressPercentage = totalCount > 0 ? Math.round((completedCount / totalCount) * 100) : 0;
 
     return (
-        <div className="space-y-6">
-            {/* Progress Summary */}
-            <div className="bg-white rounded-xl shadow-lg border border-gray-200 p-6">
-                <div className="flex justify-between items-center mb-4">
-                    <h3 className="text-lg font-semibold text-gray-900">
-                        Processing {originalFileName} - Fast Mode
-                    </h3>
-                    <div className="text-xs bg-blue-50 text-blue-700 px-3 py-1 rounded-full border border-blue-200">
-                        Progress persists on reload
+        <div
+            id="processing-section"
+            className="bg-white rounded-xl shadow-lg border border-gray-200 p-4 sm:p-6 mb-6 sm:mb-8"
+        >
+            {/* Header */}
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-4 sm:mb-6 gap-3">
+                <div className="flex items-center space-x-3">
+                    <div className="flex-shrink-0">
+                        <div className="relative">
+                            <Zap className="h-6 w-6 sm:h-7 sm:w-7 text-blue-600" />
+                            {backendSessionId && (
+                                <div className="absolute -top-1 -right-1 w-3 h-3 bg-green-500 rounded-full animate-pulse" />
+                            )}
+                        </div>
+                    </div>
+                    <div>
+                        <h2 className="text-lg sm:text-xl font-semibold text-gray-900">
+                            Processing {originalFileName}
+                        </h2>
+                        <div className="flex items-center space-x-2 text-sm text-gray-600">
+                            <span className="bg-green-100 text-green-800 text-xs px-2 py-1 rounded-full">
+                                Real-time backend processing
+                            </span>
+                            {backendSessionId && (
+                                <span className="text-xs text-gray-500">
+                                    Session: {backendSessionId.substring(0, 8)}...
+                                </span>
+                            )}
+                        </div>
                     </div>
                 </div>
 
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
-                    <div className="text-center">
-                        <div className="text-2xl font-bold text-gray-900">
-                            {processingPages.length}
-                        </div>
-                        <div className="text-sm text-gray-600">Total Pages</div>
-                    </div>
-                    <div className="text-center">
-                        <div className="text-2xl font-bold text-green-600">
-                            {completedCount}
-                        </div>
-                        <div className="text-sm text-gray-600">Completed</div>
-                    </div>
-                    <div className="text-center">
-                        <div className="text-2xl font-bold text-blue-600">
-                            {processingCount}
-                        </div>
-                        <div className="text-sm text-gray-600">Processing</div>
-                    </div>
-                    <div className="text-center">
-                        <div className="text-2xl font-bold text-red-600">
-                            {errorCount}
-                        </div>
-                        <div className="text-sm text-gray-600">Errors</div>
-                    </div>
-                </div>
-
-                {/* Progress Bar */}
-                <div className="w-full bg-gray-200 rounded-full h-3">
-                    <div
-                        className="bg-gradient-to-r from-green-500 to-green-600 h-3 rounded-full transition-all duration-500"
-                        style={{
-                            width: `${(completedCount / processingPages.length) * 100}%`,
-                        }}
-                    />
-                </div>
-                <div className="flex justify-between text-sm text-gray-600 mt-2">
-                    <span>
-                        {completedCount} of {processingPages.length} pages
-                        processed
-                    </span>
-                    <div className="flex items-center space-x-2">
-                        <span className="text-xs bg-green-100 text-green-700 px-2 py-1 rounded-full">
-                            Auto-saved & Persistent
-                        </span>
-                        {errorCount > 0 && (
-                            <button
-                                onClick={retryFailedPages}
-                                className="text-xs bg-red-100 hover:bg-red-200 text-red-700 px-3 py-1 rounded-full border border-red-200 transition-colors duration-200"
-                            >
-                                Retry {errorCount} Failed
-                            </button>
-                        )}
-                    </div>
+                <div className="flex items-center space-x-2">
+                    <button
+                        onClick={forceReset}
+                        className="bg-red-500 hover:bg-red-600 text-white text-sm px-3 py-1 rounded transition-colors"
+                    >
+                        Reset
+                    </button>
                 </div>
             </div>
 
-            {/* Page Grid */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-                {processingPages.map(page => (
+            {/* Progress Summary */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-6 mb-4 sm:mb-6">
+                <div className="text-center p-3 bg-gray-50 rounded-lg">
+                    <div className="text-xl sm:text-2xl font-bold text-gray-900">
+                        {totalCount}
+                    </div>
+                    <div className="text-xs sm:text-sm text-gray-600">Total Pages</div>
+                </div>
+                <div className="text-center p-3 bg-green-50 rounded-lg">
+                    <div className="text-xl sm:text-2xl font-bold text-green-600">
+                        {completedCount}
+                    </div>
+                    <div className="text-xs sm:text-sm text-gray-600">Completed</div>
+                </div>
+                <div className="text-center p-3 bg-blue-50 rounded-lg">
+                    <div className="text-xl sm:text-2xl font-bold text-blue-600">
+                        {processingCount}
+                    </div>
+                    <div className="text-xs sm:text-sm text-gray-600">Processing</div>
+                </div>
+                <div className="text-center p-3 bg-red-50 rounded-lg">
+                    <div className="text-xl sm:text-2xl font-bold text-red-600">
+                        {errorCount}
+                    </div>
+                    <div className="text-xs sm:text-sm text-gray-600">Errors</div>
+                </div>
+            </div>
+
+            {/* Progress Bar */}
+            <div className="mb-4 sm:mb-6">
+                <div className="flex justify-between text-sm text-gray-600 mb-2">
+                    <span>{completedCount} of {totalCount} pages processed</span>
+                    <span>{progressPercentage}%</span>
+                </div>
+                <div className="w-full bg-gray-200 rounded-full h-2 sm:h-3 overflow-hidden">
+                    <div 
+                        className="bg-green-500 h-full transition-all duration-500 ease-out"
+                        style={{ width: `${progressPercentage}%` }}
+                    />
+                </div>
+                <div className="flex justify-center mt-2">
+                    <span className="text-xs text-green-600 font-medium bg-green-50 px-2 py-1 rounded-full">
+                        Auto-saved & Persistent
+                    </span>
+                </div>
+            </div>
+
+            {/* Pages Grid */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 sm:gap-4">
+                {processingPages.map((page) => (
                     <div
                         key={page.pageNumber}
-                        className={`border rounded-lg p-4 transition-all duration-300 hover:shadow-md cursor-pointer ${getStatusColor(page.status)}`}
+                        className={`
+                            relative border-2 rounded-lg p-3 sm:p-4 cursor-pointer transition-all duration-200 hover:shadow-md
+                            ${page.status === 'completed'
+                                ? 'border-green-200 bg-green-50 hover:border-green-300'
+                                : page.status === 'processing'
+                                  ? 'border-blue-200 bg-blue-50 hover:border-blue-300 animate-pulse'
+                                  : page.status === 'error'
+                                    ? 'border-red-200 bg-red-50 hover:border-red-300'
+                                    : 'border-gray-200 bg-gray-50 hover:border-gray-300'
+                            }
+                        `}
                         onClick={() => setSelectedPage(page)}
                     >
                         {/* Page Preview */}
-                        <div className="aspect-[3/4] bg-gray-100 rounded-lg mb-3 overflow-hidden relative">
+                        <div className="aspect-[3/4] bg-white rounded border mb-3 flex items-center justify-center overflow-hidden">
                             {page.imageDataUrl ? (
-                                <Image
-                                    src={page.imageDataUrl}
-                                    alt={`${originalFileName}-Page ${page.pageNumber}`}
-                                    fill
-                                    className="object-contain"
-                                    unoptimized
-                                />
+                                <div className="w-full h-64">
+                                    <img
+                                        src={page.imageDataUrl}
+                                        alt={`Page ${page.pageNumber}`}
+                                        className="w-full h-full object-contain border border-gray-200"
+                                        onError={(e) => {
+                                            console.error(`[ERROR] Failed to load image: ${page.imageDataUrl}`, e);
+                                        }}
+                                        onLoad={() => {
+                                            console.log(`[SUCCESS] Image loaded: ${page.imageDataUrl}`);
+                                        }}
+                                    />
+                                </div>
                             ) : (
-                                <div className="w-full h-full flex items-center justify-center text-gray-500">
-                                    <div className="text-center">
-                                        <div className="text-4xl mb-2">📄</div>
-                                        <div className="text-sm">Page {page.pageNumber}</div>
-                                        <div className="text-xs text-gray-400">
-                                            {page.status === 'pending' ? 'Waiting...' : 
-                                             page.status === 'processing' ? 'Processing...' : 
-                                             page.status === 'completed' ? 'Complete' : 'Error'}
-                                        </div>
-                                    </div>
+                                <div className="w-full h-64 flex items-center justify-center text-gray-500">
+                                    Loading... (No image URL: {page.pageNumber})
                                 </div>
                             )}
                         </div>
 
                         {/* Page Info */}
-                        <div className="flex items-center justify-between">
-                            <div>
-                                <div className="font-medium text-sm flex items-center space-x-1">
-                                    <span>
-                                        {originalFileName}-Page{' '}
-                                        {page.pageNumber}
-                                    </span>
-                                    {page.retryCount && page.retryCount > 0 && (
-                                        <span className="text-xs bg-orange-100 text-orange-700 px-1 py-0.5 rounded">
-                                            Retry #{page.retryCount}
-                                        </span>
-                                    )}
-                                </div>
-                                <div className="text-xs text-gray-500">
-                                    {Math.round(page.bufferSize / 1024)} KB
-                                </div>
-                            </div>
-                            <div className="flex items-center space-x-2">
+                        <div className="space-y-2">
+                            <div className="flex items-center justify-between">
+                                <span className="text-sm font-medium text-gray-900">
+                                    Page {page.pageNumber}
+                                </span>
                                 {getStatusIcon(page.status)}
-                                <button
-                                    onClick={e => {
-                                        e.stopPropagation();
-                                        setSelectedPage(page);
-                                    }}
-                                    className="p-1 hover:bg-gray-200 rounded"
-                                >
-                                    <Eye className="w-4 h-4 text-gray-400" />
-                                </button>
                             </div>
+
+                            <div className="text-xs text-gray-600">
+                                {page.status === 'pending' && 'Waiting'}
+                                {page.status === 'processing' && 'Processing...'}
+                                {page.status === 'completed' && 'Complete'}
+                                {page.status === 'error' && 'Error'}
+                            </div>
+
+                            {page.bufferSize && (
+                                <div className="text-xs text-gray-500">
+                                    {(page.bufferSize / 1024).toFixed(0)} KB
+                                </div>
+                            )}
                         </div>
 
-                        {/* Error Message */}
-                        {page.status === 'error' && page.error && (
-                            <div className="mt-2 text-xs text-red-600 bg-red-50 p-2 rounded">
-                                {page.error}
-                            </div>
-                        )}
+                        {/* Status Indicators */}
+                        <div className="absolute top-2 right-2 flex space-x-1">
+                            {page.status === 'processing' && (
+                                <div className="bg-blue-500 text-white text-xs px-1.5 py-0.5 rounded animate-pulse">
+                                    Processing
+                                </div>
+                            )}
+                            {page.retryCount && page.retryCount > 0 && (
+                                <div className="bg-yellow-500 text-white text-xs px-1.5 py-0.5 rounded">
+                                    R{page.retryCount}
+                                </div>
+                            )}
+                        </div>
                     </div>
                 ))}
             </div>
 
-            {/* Page Detail Modal */}
+            {/* Page Details Modal */}
             {selectedPage && (
-                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-2">
-                    <div className="bg-white rounded-xl shadow-2xl max-w-[95vw] w-full max-h-[95vh] overflow-hidden">
-                        <div className="flex items-center justify-between p-4 border-b">
+                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+                    <div className="bg-white rounded-lg max-w-4xl max-h-[90vh] overflow-y-auto p-6">
+                        <div className="flex justify-between items-start mb-4">
                             <h3 className="text-lg font-semibold">
-                                {originalFileName}-Page{' '}
-                                {selectedPage.pageNumber} Details
+                                Page {selectedPage.pageNumber} Details
                             </h3>
                             <button
                                 onClick={() => setSelectedPage(null)}
-                                className="text-gray-400 hover:text-gray-600"
+                                className="text-gray-500 hover:text-gray-700"
                             >
-                                ✕
+                                ×
                             </button>
                         </div>
 
-                        <div className="flex flex-col lg:flex-row max-h-[calc(95vh-120px)]">
+                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                             {/* Image Preview */}
-                            <div className="lg:w-1/2 p-4 bg-gray-50 relative">
-                                <div className="relative w-full h-96">
+                            <div>
+                                <h4 className="font-medium mb-2">Page Preview</h4>
+                                {selectedPage.imageDataUrl && (
                                     <Image
                                         src={selectedPage.imageDataUrl}
-                                        alt={`${originalFileName}-Page ${selectedPage.pageNumber}`}
-                                        fill
-                                        className="object-contain"
-                                        unoptimized
+                                        alt={`Page ${selectedPage.pageNumber}`}
+                                        width={400}
+                                        height={533}
+                                        className="w-full border rounded"
                                     />
-                                </div>
+                                )}
                             </div>
 
-                            {/* Extracted Data */}
-                            <div className="lg:w-1/2 p-4 overflow-y-auto">
-                                <div className="flex items-center space-x-2 mb-4">
-                                    {getStatusIcon(selectedPage.status)}
-                                    <span className="font-medium capitalize">
-                                        {selectedPage.status}
-                                    </span>
+                            {/* Details */}
+                            <div className="space-y-4">
+                                <div>
+                                    <h4 className="font-medium mb-2">Status</h4>
+                                    <div className="flex items-center space-x-2">
+                                        {getStatusIcon(selectedPage.status)}
+                                        <span className="capitalize">
+                                            {selectedPage.status === 'completed' ? 'Complete' : selectedPage.status}
+                                        </span>
+                                    </div>
                                 </div>
 
-                                {selectedPage.status === 'completed' &&
-                                    selectedPage.extractedData && (
-                                        <div>
-                                            <h4 className="font-medium mb-2">
-                                                Extracted Data:
-                                            </h4>
-                                            <pre className="bg-gray-100 p-3 rounded text-sm overflow-x-auto">
-                                                {JSON.stringify(
-                                                    selectedPage.extractedData,
-                                                    null,
-                                                    2,
-                                                )}
-                                            </pre>
-                                        </div>
-                                    )}
-
-                                {selectedPage.status === 'error' &&
-                                    selectedPage.error && (
-                                        <div>
-                                            <h4 className="font-medium mb-2 text-red-600">
-                                                Error:
-                                            </h4>
-                                            <div className="bg-red-50 border border-red-200 p-3 rounded text-red-700">
-                                                {selectedPage.error}
-                                            </div>
-                                        </div>
-                                    )}
-
-                                {selectedPage.status === 'processing' && (
-                                    <div className="text-center py-8">
-                                        <div className="animate-spin w-8 h-8 border-2 border-blue-500 border-t-transparent rounded-full mx-auto mb-4"></div>
-                                        <p className="text-gray-600">
-                                            Processing page...
+                                {selectedPage.error && (
+                                    <div>
+                                        <h4 className="font-medium mb-2 text-red-600">Error</h4>
+                                        <p className="text-sm text-red-600 bg-red-50 p-2 rounded">
+                                            {selectedPage.error}
                                         </p>
                                     </div>
                                 )}
 
-                                {selectedPage.status === 'pending' && (
-                                    <div className="text-center py-8">
-                                        <Clock className="w-8 h-8 text-gray-400 mx-auto mb-4" />
-                                        <p className="text-gray-600">
-                                            Waiting to process...
-                                        </p>
+                                {selectedPage.status === 'completed' && selectedPage.extractedData && (
+                                    <div>
+                                        <h4 className="font-medium mb-2 text-green-600">Extracted Data</h4>
+                                        <pre className="text-xs bg-green-50 p-2 rounded overflow-x-auto">
+                                            {JSON.stringify(selectedPage.extractedData, null, 2)}
+                                        </pre>
                                     </div>
                                 )}
+
+                                <div>
+                                    <h4 className="font-medium mb-2">File Info</h4>
+                                    <div className="text-sm space-y-1">
+                                        <p><strong>Filename:</strong> {selectedPage.fileName}</p>
+                                        <p><strong>Type:</strong> {selectedPage.mimeType}</p>
+                                        <p><strong>Size:</strong> {(selectedPage.bufferSize / 1024).toFixed(0)} KB</p>
+                                        {selectedPage.retryCount && selectedPage.retryCount > 0 && (
+                                            <p><strong>Retries:</strong> {selectedPage.retryCount}</p>
+                                        )}
+                                    </div>
+                                </div>
                             </div>
                         </div>
                     </div>

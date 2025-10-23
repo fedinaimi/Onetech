@@ -43,7 +43,7 @@ export async function POST(request: NextRequest) {
         // Call the backend PDF split endpoint with extended timeout for large files
         const timeoutMs = fileSizeMB > 25 ? 180000 : 120000; // 3min for large files, 2min for normal
         
-        const backendResponse = await fetch(`${BACKEND_URL}/split-pdf/`, {
+        const backendResponse = await fetch(`${BACKEND_URL}/processing/split-pdf/`, {
             method: 'POST',
             body: backendFormData,
             signal: AbortSignal.timeout(timeoutMs),
@@ -71,7 +71,37 @@ export async function POST(request: NextRequest) {
         const result = await backendResponse.json();
         console.log(`PDF split successfully: ${result.totalPages} pages`);
 
-        return NextResponse.json(result);
+        // Transform backend response to match frontend PageData interface
+        const transformedPages = result.pages?.map((page: any) => {
+            // Ensure the imageUrl is a full URL (add backend URL if it's a relative path)
+            let fullImageUrl = page.imageUrl;
+            if (page.imageUrl && page.imageUrl.startsWith('/')) {
+                fullImageUrl = `${BACKEND_URL}${page.imageUrl}`;
+            }
+            
+            return {
+                pageNumber: page.pageNumber,
+                fileName: page.filename || `page_${page.pageNumber}.jpg`,
+                mimeType: 'image/jpeg',
+                imageDataUrl: fullImageUrl, // Full URL to backend media file
+                bufferSize: 0, // Not available from backend response
+                status: 'idle' as const,
+                extractedData: null,
+                error: null,
+                retryCount: 0
+            };
+        }) || [];
+
+        console.log('Transformed pages:', transformedPages.map((p: any) => ({
+            pageNumber: p.pageNumber,
+            imageDataUrl: p.imageDataUrl,
+            fileName: p.fileName
+        })));
+
+        return NextResponse.json({
+            ...result,
+            pages: transformedPages
+        });
     } catch (error) {
         console.error('Error splitting PDF:', error);
 

@@ -296,8 +296,15 @@ export default function DocumentList({
             });
 
             if (!response.ok) {
-                const errorData = await response.json();
-                throw new Error(errorData.error || 'Export failed');
+                let errorMessage = `Export failed with status ${response.status}`;
+                try {
+                    const errorData = await response.json();
+                    errorMessage = errorData.error || errorData.detail || errorMessage;
+                    console.error('[EXPORT] Error response:', errorData);
+                } catch (e) {
+                    console.error('[EXPORT] Could not parse error response:', e);
+                }
+                throw new Error(errorMessage);
             }
 
             // Get filename from response headers

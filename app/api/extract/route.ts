@@ -1,6 +1,3 @@
-import type { DocumentType } from '@/lib/documentUtils';
-import { saveDocument } from '@/lib/documentUtils';
-import dbConnect from '@/lib/mongodb';
 import {
     createFileFromBuffer,
     performFullCleanup,
@@ -14,6 +11,35 @@ import { NextRequest, NextResponse } from 'next/server';
 const ONETECH_API_URL =
     process.env.NEXT_PUBLIC_EXTRACT_API ||
     'http://onetech-backend-gdl7h722ruzvs.francecentral.azurecontainer.io:8000/extract/';
+
+const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://127.0.0.1:8000';
+
+type DocumentType = 'Rebut' | 'NPT' | 'Kosu';
+
+/**
+ * Helper function to save document to backend
+ */
+async function saveDocumentToBackend(document: any, documentType: DocumentType) {
+    try {
+        const response = await fetch(`${BACKEND_URL}/documents/`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(document),
+        });
+
+        if (!response.ok) {
+            const error = await response.json().catch(() => ({ error: 'Failed to save document' }));
+            throw new Error(error.error || 'Failed to save document to backend');
+        }
+
+        return await response.json();
+    } catch (error) {
+        console.error('Error saving document to backend:', error);
+        throw error;
+    }
+}
 
 // Undici agent for better timeout handling
 let undiciAgent: any = null;
@@ -155,16 +181,15 @@ async function processPageWithExternalAPI(
 
         console.log(`Page ${pageNumber} - Formatted document ready for saving`);
 
-        // Save to database
+        // Save to backend database
         try {
-            await dbConnect();
-            const savedDocument = await saveDocument(
+            const savedDocument = await saveDocumentToBackend(
                 formattedDocument,
                 documentType as DocumentType,
             );
             console.log(
                 `Page ${pageNumber} - Document saved to database:`,
-                savedDocument._id,
+                savedDocument.id,
             );
 
             return {
@@ -258,9 +283,6 @@ async function processImageDirectly(
             };
         }
 
-        // Connect to database
-        await dbConnect();
-
         // Format the document in the same way as processPageWithExternalAPI
         const documentId = `${file.name}_${Date.now()}`;
         const formattedDocument = {
@@ -282,15 +304,15 @@ async function processImageDirectly(
             },
         };
 
-        // Save the document
+        // Save the document to backend
         try {
-            const savedDocument = await saveDocument(
+            const savedDocument = await saveDocumentToBackend(
                 formattedDocument,
                 documentType as DocumentType,
             );
 
             console.log(
-                `✅ Image processed and saved successfully: ${savedDocument._id}`,
+                `✅ Image processed and saved successfully: ${savedDocument.id}`,
             );
 
             return {

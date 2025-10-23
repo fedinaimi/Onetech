@@ -63,11 +63,11 @@ export default function ImageProcessor({
                         'Content-Type': 'application/json',
                     },
                     body: JSON.stringify({
-                        imageDataUrl: image.imageDataUrl,
+                        imageUrl: image.imageDataUrl, // Backend expects imageUrl
                         fileName: image.fileName,
                         mimeType: image.mimeType,
                         documentType,
-                        originalFileName,
+                        originalFilename: originalFileName, // Backend expects lowercase 'n'
                         pageNumber: 1, // Images are treated as single page
                     }),
                     signal: AbortSignal.timeout(15 * 60 * 1000), // 15 minutes timeout
