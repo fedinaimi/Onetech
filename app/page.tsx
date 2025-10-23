@@ -466,51 +466,59 @@ export default function HomePage() {
     // Add throttling to prevent excessive API calls
     const lastLoadTime = useRef<number>(0);
     const lastLoadedType = useRef<DocumentType | null>(null);
-    const loadDocuments = useCallback(async (forceReload: boolean = false) => {
-        const now = Date.now();
-        const typeChanged = lastLoadedType.current !== selectedType;
-        
-        // Allow immediate reload if:
-        // 1. Force reload is requested
-        // 2. Document type has changed (user clicked different tab)
-        // 3. More than 1 second has passed (reduced from 2 seconds)
-        const shouldLoad = forceReload || typeChanged || (now - lastLoadTime.current >= 1000);
-        
-        if (!shouldLoad) {
-            console.log('🔄 Throttling loadDocuments call - too frequent');
-            return;
-        }
-        
-        lastLoadTime.current = now;
-        lastLoadedType.current = selectedType;
+    const loadDocuments = useCallback(
+        async (forceReload: boolean = false) => {
+            const now = Date.now();
+            const typeChanged = lastLoadedType.current !== selectedType;
 
-        console.log(`📥 Loading ${selectedType} documents...`);
-        setIsLoading(true);
-        try {
-            const response = await axios.get(
-                `/api/documents?type=${selectedType}`,
-            );
-            setDocuments(response.data);
-            console.log(`✅ Loaded ${response.data.length} ${selectedType} documents`);
+            // Allow immediate reload if:
+            // 1. Force reload is requested
+            // 2. Document type has changed (user clicked different tab)
+            // 3. More than 1 second has passed (reduced from 2 seconds)
+            const shouldLoad =
+                forceReload ||
+                typeChanged ||
+                now - lastLoadTime.current >= 1000;
 
-            // Also update the count for current type
-            setDocumentCounts(prev => ({
-                ...prev,
-                [selectedType]: response.data.length,
-            }));
-        } catch (error) {
-            console.error('Error loading documents:', error);
-            // Clear documents on error to show empty state
-            setDocuments([]);
-        } finally {
-            setIsLoading(false);
-        }
-    }, [selectedType]);
+            if (!shouldLoad) {
+                console.log('🔄 Throttling loadDocuments call - too frequent');
+                return;
+            }
+
+            lastLoadTime.current = now;
+            lastLoadedType.current = selectedType;
+
+            console.log(`📥 Loading ${selectedType} documents...`);
+            setIsLoading(true);
+            try {
+                const response = await axios.get(
+                    `/api/documents?type=${selectedType}`,
+                );
+                setDocuments(response.data);
+                console.log(
+                    `✅ Loaded ${response.data.length} ${selectedType} documents`,
+                );
+
+                // Also update the count for current type
+                setDocumentCounts(prev => ({
+                    ...prev,
+                    [selectedType]: response.data.length,
+                }));
+            } catch (error) {
+                console.error('Error loading documents:', error);
+                // Clear documents on error to show empty state
+                setDocuments([]);
+            } finally {
+                setIsLoading(false);
+            }
+        },
+        [selectedType],
+    );
 
     // Load documents and counts when component mounts or type changes
     React.useEffect(() => {
         console.log(`🔄 Selected type changed to: ${selectedType}`);
-        
+
         // Clean up only stuck sessions, but preserve valid ones for reload persistence
         cleanupStuckSessions(); // This now uses 1-hour timeout instead of clearing everything
 
@@ -1523,7 +1531,6 @@ export default function HomePage() {
                             {(['Rebut', 'NPT', 'Kosu'] as DocumentType[]).map(
                                 type => {
                                     const isSelected = selectedType === type;
-                                    const isClickable = !isProcessingPDF && !isUploading;
                                     const config = {
                                         Rebut: {
                                             color: 'blue',
@@ -1562,7 +1569,9 @@ export default function HomePage() {
                                         <button
                                             key={type}
                                             onClick={() => {
-                                                console.log(`🔄 User clicked ${type} tab`);
+                                                console.log(
+                                                    `🔄 User clicked ${type} tab`,
+                                                );
                                                 setSelectedType(type);
                                                 setDocuments([]); // Clear immediately for visual feedback
                                             }}
@@ -1664,7 +1673,6 @@ export default function HomePage() {
                         </div>
                     </div>
                 </div>
-
 
                 {/* Page Processing Component */}
                 {processingPages.length > 0 && (
