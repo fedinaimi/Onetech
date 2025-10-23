@@ -32,11 +32,21 @@ interface DocumentVerificationModalProps {
         newStatus: VerificationStatus,
     ) => Promise<void>;
     selectedType: string;
+    onFieldUpdate?: () => void; // Callback for when a field is updated
+    refreshDocument?: () => Promise<any>; // Callback to refresh document data
 }
 
 export const DocumentVerificationModal: React.FC<
     DocumentVerificationModalProps
-> = ({ document, isOpen, onClose, onSave, selectedType }) => {
+> = ({
+    document,
+    isOpen,
+    onClose,
+    onSave,
+    selectedType,
+    onFieldUpdate,
+    refreshDocument,
+}) => {
     const [editedData, setEditedData] = useState<any>(null);
     const [hasChanges, setHasChanges] = useState(false);
     const [saving, setSaving] = useState(false);
@@ -81,6 +91,7 @@ export const DocumentVerificationModal: React.FC<
             console.log('Verification Modal - Document:', document);
             console.log('Verification Modal - Document Data:', documentData);
 
+            // Always use fresh data when modal opens
             setEditedData(JSON.parse(JSON.stringify(documentData)));
             setHasChanges(false);
             setImageZoom(100);
@@ -108,25 +119,108 @@ export const DocumentVerificationModal: React.FC<
     ) => {
         if (!editedData) return;
 
-        // Update the editedData directly for immediate UI feedback
-        const newData = { ...editedData };
-        const fieldPath = field.replace('data.', '').split('.');
-        let current = newData;
+        try {
+            // First, update the UI immediately for real-time feedback
+            const newData = JSON.parse(JSON.stringify(editedData));
+            const fieldPath = field.replace('data.', '').split('.');
+            let current = newData;
 
-        // Navigate to the parent of the field to be updated
-        for (let i = 0; i < fieldPath.length - 1; i++) {
-            if (current[fieldPath[i]] === undefined) {
-                current[fieldPath[i]] = {};
+            // Navigate to the parent of the field to be updated
+            for (let i = 0; i < fieldPath.length - 1; i++) {
+                if (current[fieldPath[i]] === undefined) {
+                    current[fieldPath[i]] = {};
+                }
+                current = current[fieldPath[i]];
             }
-            current = current[fieldPath[i]];
+
+            // Update the final field
+            current[fieldPath[fieldPath.length - 1]] = newValue;
+
+            // Update the state immediately for real-time UI update
+            setEditedData(newData);
+            setHasChanges(true);
+            setEditingCell(null);
+
+            // Then make the API call to persist the change
+            const response = await fetch('/api/documents', {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    id: docId,
+                    type: selectedType,
+                    field,
+                    oldValue,
+                    newValue,
+                }),
+            });
+
+            if (!response.ok) {
+                const errorData = await response
+                    .json()
+                    .catch(() => ({ error: 'Unknown error' }));
+                throw new Error(
+                    `Failed to update field: ${response.status} - ${errorData.error || 'Unknown error'}`,
+                );
+            }
+
+            const result = await response.json();
+            console.log('Field updated successfully:', {
+                field,
+                oldValue,
+                newValue,
+                result,
+            });
+
+            // Notify parent component that a field was updated with a small delay
+            // to ensure backend has fully processed the update
+            if (onFieldUpdate) {
+                setTimeout(async () => {
+                    onFieldUpdate();
+
+                    // Also refresh the modal's document data if callback is provided
+                    if (refreshDocument) {
+                        try {
+                            const updatedDocument = await refreshDocument();
+                            if (updatedDocument) {
+                                // Update the modal's data with the refreshed document
+                                let documentData = updatedDocument.data;
+                                if (
+                                    documentData &&
+                                    typeof documentData === 'object' &&
+                                    documentData.data
+                                ) {
+                                    documentData = documentData.data;
+                                }
+                                setEditedData(
+                                    JSON.parse(JSON.stringify(documentData)),
+                                );
+                            }
+                        } catch (error) {
+                            console.error(
+                                'Error refreshing document in modal:',
+                                error,
+                            );
+                        }
+                    }
+                }, 500); // 500ms delay to ensure backend processing is complete
+            }
+        } catch (error) {
+            console.error('Error updating field:', error);
+            // Revert the UI change on error by reloading the original data
+            if (document && document.data) {
+                let documentData = document.data;
+                if (
+                    documentData &&
+                    typeof documentData === 'object' &&
+                    documentData.data
+                ) {
+                    documentData = documentData.data;
+                }
+                setEditedData(JSON.parse(JSON.stringify(documentData)));
+            }
         }
-
-        // Update the final field
-        current[fieldPath[fieldPath.length - 1]] = newValue;
-
-        setEditedData(newData);
-        setHasChanges(true);
-        setEditingCell(null);
     };
 
     const startEdit = (docId: string, field: string, currentValue: any) => {
@@ -144,16 +238,38 @@ export const DocumentVerificationModal: React.FC<
             currentValue = currentValue[path];
         }
 
+        console.log('saveEdit - Field:', editingCell.field);
+        console.log('saveEdit - Current value from data:', currentValue);
+        console.log('saveEdit - New value from input:', editValue);
+
+        // Ensure we have a valid new value
+        const newValue = editValue || '';
+        console.log('saveEdit - Using new value:', newValue);
+
+        // First, update the frontend state immediately
+        const newData = JSON.parse(JSON.stringify(editedData));
+        let current = newData;
+        for (let i = 0; i < fieldPath.length - 1; i++) {
+            if (current[fieldPath[i]] === undefined) {
+                current[fieldPath[i]] = {};
+            }
+            current = current[fieldPath[i]];
+        }
+        current[fieldPath[fieldPath.length - 1]] = newValue;
+        setEditedData(newData);
+        setHasChanges(true);
+
         try {
             await handleCellEdit(
                 editingCell.doc,
                 editingCell.field,
                 currentValue,
-                editValue,
+                newValue,
             );
         } catch (error) {
             console.error('Error saving field in modal:', error);
-            // Optionally show error message to user
+            // Revert the frontend state on error
+            setEditedData(editedData);
         }
     };
 
@@ -551,6 +667,7 @@ export const DocumentVerificationModal: React.FC<
             startEdit,
             saveEdit,
             setSelectedDocument: () => {}, // Not needed in verification modal
+            editedData, // Pass the edited data to get current values
         };
 
         return (

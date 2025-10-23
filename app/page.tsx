@@ -1737,6 +1737,33 @@ export default function HomePage() {
                 }}
                 onSave={handleVerificationSave}
                 selectedType={selectedType}
+                onFieldUpdate={async () => {
+                    // Refresh documents when a field is updated in the modal
+                    // Force reload to bypass throttling for field updates
+                    await loadDocuments(true);
+                }}
+                refreshDocument={async () => {
+                    // Refresh the specific document being edited in the modal
+                    if (selectedDocument || verifyingDocument) {
+                        const docId = (selectedDocument || verifyingDocument)
+                            ?.id;
+                        if (docId) {
+                            try {
+                                const response = await axios.get(
+                                    `/api/documents?id=${docId}&type=${selectedType}`,
+                                );
+                                return response.data;
+                            } catch (error) {
+                                console.error(
+                                    'Error refreshing document:',
+                                    error,
+                                );
+                                return null;
+                            }
+                        }
+                    }
+                    return null;
+                }}
             />
         </div>
     );

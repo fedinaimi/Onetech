@@ -25,6 +25,7 @@ interface TableRendererProps {
     startEdit: (docId: string, field: string, currentValue: any) => void;
     saveEdit: () => void;
     setSelectedDocument: (doc: any) => void;
+    editedData?: any; // Optional edited data for getting current values
 }
 
 // Helper function to get verification status badge
@@ -89,26 +90,10 @@ const EditableField: React.FC<EditableFieldProps> = ({
         setLocalValue(editValue);
     }, [editValue]);
 
-    const autoSave = React.useCallback(async () => {
-        if (localValue !== editValue) {
-            setIsSaving(true);
-            setEditValue(localValue);
-            try {
-                await saveEdit();
-                setIsSaving(false);
-                setShowSaved(true);
-                setTimeout(() => setShowSaved(false), 2000);
-            } catch (error) {
-                console.error('Error saving field:', error);
-                setIsSaving(false);
-                // Show error state
-                setShowSaved(false);
-            }
-        }
-    }, [localValue, editValue, setEditValue, saveEdit]);
-
     const handleInputChange = (newValue: string) => {
         setLocalValue(newValue);
+        // Also update editValue immediately to keep them in sync
+        setEditValue(newValue);
 
         // Clear existing timeout
         if (saveTimeoutRef.current) {
@@ -116,9 +101,20 @@ const EditableField: React.FC<EditableFieldProps> = ({
         }
 
         // Set new timeout for auto-save (1 second after user stops typing)
-        saveTimeoutRef.current = setTimeout(() => {
-            setEditValue(newValue);
-            autoSave();
+        saveTimeoutRef.current = setTimeout(async () => {
+            try {
+                setIsSaving(true);
+                await saveEdit();
+                setIsSaving(false);
+                setShowSaved(true);
+                setTimeout(() => setShowSaved(false), 2000);
+            } catch (error) {
+                console.error('Error saving field:', error);
+                setIsSaving(false);
+                // Revert to original value on error
+                setLocalValue(editValue);
+                setShowSaved(false);
+            }
         }, 1000);
     };
 
@@ -146,8 +142,28 @@ const EditableField: React.FC<EditableFieldProps> = ({
                                 if (saveTimeoutRef.current) {
                                     clearTimeout(saveTimeoutRef.current);
                                 }
-                                autoSave();
-                                setEditingCell(null);
+                                // Update edit value and save immediately
+                                setEditValue(localValue);
+                                setTimeout(async () => {
+                                    try {
+                                        setIsSaving(true);
+                                        await saveEdit();
+                                        setIsSaving(false);
+                                        setShowSaved(true);
+                                        setTimeout(
+                                            () => setShowSaved(false),
+                                            2000,
+                                        );
+                                        setEditingCell(null);
+                                    } catch (error) {
+                                        console.error(
+                                            'Error saving field:',
+                                            error,
+                                        );
+                                        setIsSaving(false);
+                                        setEditingCell(null);
+                                    }
+                                }, 50); // Shorter delay
                             } else if (e.key === 'Escape') {
                                 if (saveTimeoutRef.current) {
                                     clearTimeout(saveTimeoutRef.current);
@@ -161,13 +177,24 @@ const EditableField: React.FC<EditableFieldProps> = ({
                             if (saveTimeoutRef.current) {
                                 clearTimeout(saveTimeoutRef.current);
                             }
-                            try {
-                                await autoSave();
-                                setTimeout(() => setEditingCell(null), 100);
-                            } catch (error) {
-                                console.error('Error saving on blur:', error);
-                                setEditingCell(null);
-                            }
+                            // Update edit value and save immediately
+                            setEditValue(localValue);
+                            setTimeout(async () => {
+                                try {
+                                    setIsSaving(true);
+                                    await saveEdit();
+                                    setIsSaving(false);
+                                    setShowSaved(true);
+                                    setTimeout(() => setShowSaved(false), 2000);
+                                    setTimeout(() => setEditingCell(null), 100);
+                                } catch (error) {
+                                    console.error(
+                                        'Error saving on blur:',
+                                        error,
+                                    );
+                                    setEditingCell(null);
+                                }
+                            }, 50); // Shorter delay
                         }}
                         placeholder="Enter value..."
                     />
@@ -310,16 +337,20 @@ export const RebutTable: React.FC<TableRendererProps> = ({
     setEditingCell,
     startEdit,
     saveEdit,
+    editedData,
 }) => {
+    // Use editedData if available, otherwise use doc.data
+    const dataSource = editedData || doc.data;
+
     // Generate header fields dynamically from the actual header data
-    const headerFields = doc.data?.header
-        ? Object.keys(doc.data.header).map(key => ({
+    const headerFields = dataSource?.header
+        ? Object.keys(dataSource.header).map(key => ({
               label:
                   key.charAt(0).toUpperCase() + key.slice(1).replace(/_/g, ' '),
               field: `data.header.${key}`,
-              value: doc.data.header[key],
+              value: dataSource.header[key],
               type:
-                  typeof doc.data.header[key] === 'number'
+                  typeof dataSource.header[key] === 'number'
                       ? ('number' as const)
                       : ('text' as const),
           }))
@@ -343,10 +374,10 @@ export const RebutTable: React.FC<TableRendererProps> = ({
             )}
 
             {/* Dynamic sections for any arrays in the data */}
-            {Object.keys(doc.data || {}).map(key => {
+            {Object.keys(dataSource || {}).map(key => {
                 if (key === 'header' || key === 'document_type') return null;
 
-                const value = doc.data[key];
+                const value = dataSource[key];
                 if (Array.isArray(value) && value.length > 0) {
                     return (
                         <div
@@ -466,16 +497,20 @@ export const NPTTable: React.FC<TableRendererProps> = ({
     setEditingCell,
     startEdit,
     saveEdit,
+    editedData,
 }) => {
+    // Use editedData if available, otherwise use doc.data
+    const dataSource = editedData || doc.data;
+
     // Generate header fields dynamically from the actual header data
-    const headerFields = doc.data?.header
-        ? Object.keys(doc.data.header).map(key => ({
+    const headerFields = dataSource?.header
+        ? Object.keys(dataSource.header).map(key => ({
               label:
                   key.charAt(0).toUpperCase() + key.slice(1).replace(/_/g, ' '),
               field: `data.header.${key}`,
-              value: doc.data.header[key],
+              value: dataSource.header[key],
               type:
-                  typeof doc.data.header[key] === 'number'
+                  typeof dataSource.header[key] === 'number'
                       ? ('number' as const)
                       : ('text' as const),
           }))
@@ -499,9 +534,9 @@ export const NPTTable: React.FC<TableRendererProps> = ({
             )}
 
             {/* Downtime Events Table - Dynamic based on actual data */}
-            {doc.data?.downtime_events &&
-                Array.isArray(doc.data.downtime_events) &&
-                doc.data.downtime_events.length > 0 && (
+            {dataSource?.downtime_events &&
+                Array.isArray(dataSource.downtime_events) &&
+                dataSource.downtime_events.length > 0 && (
                     <div className="bg-white shadow-lg rounded-lg border border-gray-200 overflow-hidden">
                         <div className="px-6 py-4 bg-gradient-to-r from-orange-600 to-orange-700">
                             <h3 className="text-lg font-semibold text-white">
@@ -513,7 +548,7 @@ export const NPTTable: React.FC<TableRendererProps> = ({
                                 <thead className="bg-gray-50">
                                     <tr>
                                         {Object.keys(
-                                            doc.data.downtime_events[0] || {},
+                                            dataSource.downtime_events[0] || {},
                                         ).map(key => (
                                             <th
                                                 key={key}
@@ -531,7 +566,7 @@ export const NPTTable: React.FC<TableRendererProps> = ({
                                     </tr>
                                 </thead>
                                 <tbody className="bg-white divide-y divide-gray-200">
-                                    {doc.data.downtime_events.map(
+                                    {dataSource.downtime_events.map(
                                         (event: any, index: number) => (
                                             <tr key={index}>
                                                 {Object.keys(event).map(key => (
@@ -710,7 +745,10 @@ export const KosuTable: React.FC<TableRendererProps> = ({
     setEditingCell,
     startEdit,
     saveEdit,
+    editedData,
 }) => {
+    // Use editedData if available, otherwise use doc.data
+    const dataSource = editedData || doc.data;
     // Define the header fields that appear first in Kosu documents
     const headerFieldKeys = [
         'Titre du document',
@@ -727,13 +765,13 @@ export const KosuTable: React.FC<TableRendererProps> = ({
 
     // Extract header fields from the actual data
     const headerFields = headerFieldKeys
-        .filter(key => doc.data && doc.data[key] !== undefined)
+        .filter(key => dataSource && dataSource[key] !== undefined)
         .map(key => ({
             label: key,
             field: `data.${key}`,
-            value: doc.data[key],
+            value: dataSource[key],
             type:
-                typeof doc.data[key] === 'number'
+                typeof dataSource[key] === 'number'
                     ? ('number' as const)
                     : ('text' as const),
         }));
@@ -778,9 +816,9 @@ export const KosuTable: React.FC<TableRendererProps> = ({
             )}
 
             {/* Hourly Tracking Section */}
-            {doc.data?.['Suivi horaire'] &&
-                Array.isArray(doc.data['Suivi horaire']) &&
-                doc.data['Suivi horaire'].length > 0 && (
+            {dataSource?.['Suivi horaire'] &&
+                Array.isArray(dataSource['Suivi horaire']) &&
+                dataSource['Suivi horaire'].length > 0 && (
                     <div className="bg-white shadow-lg rounded-lg border border-gray-200">
                         <div className="px-6 py-4 bg-gradient-to-r from-blue-600 to-blue-700">
                             <h3 className="text-lg font-semibold text-white">
@@ -810,7 +848,7 @@ export const KosuTable: React.FC<TableRendererProps> = ({
                                         </tr>
                                     </thead>
                                     <tbody className="bg-white divide-y divide-gray-200">
-                                        {doc.data['Suivi horaire'].map(
+                                        {dataSource['Suivi horaire'].map(
                                             (item: any, index: number) => (
                                                 <tr
                                                     key={index}
