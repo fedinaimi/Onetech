@@ -34,16 +34,16 @@ interface PageData {
     error: string | null;
 }
 
-interface ImageData {
-    fileName: string;
-    mimeType: string;
-    imageDataUrl: string;
-    fileSize: number;
-    status: 'pending' | 'processing' | 'completed' | 'error';
-    extractedData: any;
-    error: string | null;
-    retryCount?: number;
-}
+// interface ImageData {
+//     fileName: string;
+//     mimeType: string;
+//     imageDataUrl: string;
+//     fileSize: number;
+//     status: 'pending' | 'processing' | 'completed' | 'error';
+//     extractedData: any;
+//     error: string | null;
+//     retryCount?: number;
+// }
 
 interface UploadingFile {
     id: string;
@@ -282,7 +282,6 @@ export default function HomePage() {
                     pageCount,
                     isProcessing,
                     documentType: savedType,
-                    originalFileName,
                 } = JSON.parse(minimalState);
                 if (savedType === selectedType && isProcessing) {
                     console.log(
@@ -300,38 +299,38 @@ export default function HomePage() {
     }, [selectedType, cleanupStuckSessions]);
 
     // Enhanced session storage for PDF data persistence
-    const savePDFSession = useCallback(
-        (file: File, pages: PageData[], documentType: string) => {
-            try {
-                // Check if we're in the browser (client-side)
-                if (typeof window === 'undefined') {
-                    return;
-                }
-
-                // Save PDF file info for resume capability
-                const sessionData = {
-                    originalFileName: file.name,
-                    fileSize: file.size,
-                    fileType: file.type,
-                    documentType,
-                    pageCount: pages.length,
-                    timestamp: Date.now(),
-                    sessionId: `pdf_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-                };
-
-                sessionStorage.setItem(
-                    'pdf-session',
-                    JSON.stringify(sessionData),
-                );
-                console.log(
-                    `💾 Saved PDF session: ${file.name} (${pages.length} pages)`,
-                );
-            } catch (error) {
-                console.error('Error saving PDF session:', error);
-            }
-        },
-        [],
-    );
+    // const savePDFSession = useCallback(
+    //     (file: File, pages: PageData[], documentType: string) => {
+    //         try {
+    //             // Check if we're in the browser (client-side)
+    //             if (typeof window === 'undefined') {
+    //                 return;
+    //             }
+    //
+    //             // Save PDF file info for resume capability
+    //             const sessionData = {
+    //                 originalFileName: file.name,
+    //                 fileSize: file.size,
+    //                 fileType: file.type,
+    //                 documentType,
+    //                 pageCount: pages.length,
+    //                 timestamp: Date.now(),
+    //                 sessionId: `pdf_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+    //             };
+    //
+    //             sessionStorage.setItem(
+    //                 'pdf-session',
+    //                 JSON.stringify(sessionData),
+    //             );
+    //             console.log(
+    //                 `💾 Saved PDF session: ${file.name} (${pages.length} pages)`,
+    //             );
+    //         } catch (error) {
+    //             console.error('Error saving PDF session:', error);
+    //         }
+    //     },
+    //     [],
+    // );
 
     // Load PDF session on reload
     const loadPDFSession = useCallback(() => {
@@ -466,21 +465,33 @@ export default function HomePage() {
 
     // Add throttling to prevent excessive API calls
     const lastLoadTime = useRef<number>(0);
-    const loadDocuments = useCallback(async () => {
-        // Throttle: Don't load more than once every 2 seconds
+    const lastLoadedType = useRef<DocumentType | null>(null);
+    const loadDocuments = useCallback(async (forceReload: boolean = false) => {
         const now = Date.now();
-        if (now - lastLoadTime.current < 2000) {
+        const typeChanged = lastLoadedType.current !== selectedType;
+        
+        // Allow immediate reload if:
+        // 1. Force reload is requested
+        // 2. Document type has changed (user clicked different tab)
+        // 3. More than 1 second has passed (reduced from 2 seconds)
+        const shouldLoad = forceReload || typeChanged || (now - lastLoadTime.current >= 1000);
+        
+        if (!shouldLoad) {
             console.log('🔄 Throttling loadDocuments call - too frequent');
             return;
         }
+        
         lastLoadTime.current = now;
+        lastLoadedType.current = selectedType;
 
+        console.log(`📥 Loading ${selectedType} documents...`);
         setIsLoading(true);
         try {
             const response = await axios.get(
                 `/api/documents?type=${selectedType}`,
             );
             setDocuments(response.data);
+            console.log(`✅ Loaded ${response.data.length} ${selectedType} documents`);
 
             // Also update the count for current type
             setDocumentCounts(prev => ({
@@ -489,6 +500,8 @@ export default function HomePage() {
             }));
         } catch (error) {
             console.error('Error loading documents:', error);
+            // Clear documents on error to show empty state
+            setDocuments([]);
         } finally {
             setIsLoading(false);
         }
@@ -496,14 +509,18 @@ export default function HomePage() {
 
     // Load documents and counts when component mounts or type changes
     React.useEffect(() => {
+        console.log(`🔄 Selected type changed to: ${selectedType}`);
+        
         // Clean up only stuck sessions, but preserve valid ones for reload persistence
         cleanupStuckSessions(); // This now uses 1-hour timeout instead of clearing everything
 
-        loadDocuments();
+        // Force reload when type changes to ensure fresh data
+        loadDocuments(true); // Force reload on type change
         loadDocumentCounts(); // Load all counts
         loadPersistedProcessingState(); // Re-enabled for reload persistence
         loadPDFSession(); // Re-enabled for PDF session persistence
     }, [
+        selectedType, // Explicitly track selectedType changes
         loadDocuments,
         loadDocumentCounts,
         loadPersistedProcessingState,
@@ -622,7 +639,6 @@ export default function HomePage() {
 
                 if (batchResponse.data.success) {
                     const sessionId = batchResponse.data.sessionId;
-                    const status = batchResponse.data.status;
 
                     console.log(
                         `Backend batch processing started for image with session: ${sessionId}`,
@@ -644,6 +660,26 @@ export default function HomePage() {
 
                     setProcessingPages(pages);
 
+                    // Create uploadingFile entry for progress tracking
+                    const fileId = `img-${sessionId}`;
+                    const uploadingFile: UploadingFile = {
+                        id: fileId,
+                        name: file.name,
+                        progress: 0,
+                        status: 'uploading',
+                        message: 'Processing image...',
+                        totalPages: 1,
+                        currentPage: 0,
+                        pageResults: [
+                            {
+                                pageNumber: 1,
+                                status: 'pending',
+                                message: 'Waiting...',
+                            },
+                        ],
+                    };
+                    setUploadingFiles(prev => [...prev, uploadingFile]);
+
                     // Store session info for PageProcessor polling
                     if (typeof window !== 'undefined') {
                         localStorage.setItem(
@@ -654,6 +690,7 @@ export default function HomePage() {
                                 originalFileName: file.name,
                                 documentType: selectedType,
                                 totalPages: 1,
+                                uploadFileId: fileId,
                             }),
                         );
                     }
@@ -828,6 +865,9 @@ export default function HomePage() {
                     );
 
                     // Create page data structure from the status for the UI
+                    const estimatedPageSize = Math.ceil(
+                        file.size / status.total_pages,
+                    );
                     const pages: PageData[] = Array.from(
                         { length: status.total_pages },
                         (_, index) => ({
@@ -835,7 +875,7 @@ export default function HomePage() {
                             fileName: `${file.name.split('.')[0]}-page-${index + 1}.jpg`,
                             mimeType: 'image/jpeg',
                             imageDataUrl: '', // Will be populated later if needed
-                            bufferSize: 0,
+                            bufferSize: estimatedPageSize,
                             status: 'pending' as const,
                             extractedData: null,
                             error: null,
@@ -843,6 +883,24 @@ export default function HomePage() {
                     );
 
                     setProcessingPages(pages);
+
+                    // Create uploadingFile entry for progress tracking in UI
+                    const fileId = `pdf-${sessionId}`;
+                    const uploadingFile: UploadingFile = {
+                        id: fileId,
+                        name: file.name,
+                        progress: 0,
+                        status: 'uploading',
+                        message: `Processing ${status.total_pages} pages...`,
+                        totalPages: status.total_pages,
+                        currentPage: 0,
+                        pageResults: pages.map(p => ({
+                            pageNumber: p.pageNumber,
+                            status: 'pending' as const,
+                            message: 'Waiting...',
+                        })),
+                    };
+                    setUploadingFiles(prev => [...prev, uploadingFile]);
 
                     // Store session ID for polling
                     const pdfSession = {
@@ -853,6 +911,7 @@ export default function HomePage() {
                         documentType: selectedType,
                         pageCount: status.total_pages,
                         timestamp: Date.now(),
+                        uploadFileId: fileId, // Link to uploadingFile for progress updates
                     };
 
                     if (typeof window !== 'undefined') {
@@ -952,6 +1011,52 @@ export default function HomePage() {
                         : p,
                 );
 
+                // Calculate progress and update uploadingFiles
+                const completedPages = updated.filter(
+                    p => p.status === 'completed',
+                ).length;
+                const totalPages = updated.length;
+                const progress = Math.round(
+                    (completedPages / totalPages) * 100,
+                );
+
+                // Update the corresponding uploadingFile entry
+                setUploadingFiles(prevFiles =>
+                    prevFiles.map(f => {
+                        // Check if this file matches the current PDF session
+                        const batchSession =
+                            typeof window !== 'undefined'
+                                ? localStorage.getItem('batch-session')
+                                : null;
+                        if (batchSession) {
+                            const session = JSON.parse(batchSession);
+                            if (f.id === session.uploadFileId) {
+                                return {
+                                    ...f,
+                                    progress,
+                                    currentPage: completedPages,
+                                    message: `Processing page ${completedPages}/${totalPages}...`,
+                                    status:
+                                        completedPages === totalPages
+                                            ? 'completed'
+                                            : 'uploading',
+                                    pageResults: updated.map(p => ({
+                                        pageNumber: p.pageNumber,
+                                        status: p.status,
+                                        message:
+                                            p.status === 'completed'
+                                                ? 'Done'
+                                                : p.status === 'error'
+                                                  ? 'Failed'
+                                                  : 'Processing...',
+                                    })),
+                                };
+                            }
+                        }
+                        return f;
+                    }),
+                );
+
                 // Save updated state to localStorage
                 const originalFileName =
                     prev[0]?.fileName?.split('-page-')[0] || 'document';
@@ -963,7 +1068,7 @@ export default function HomePage() {
         [selectedType, saveProcessingState],
     );
 
-    const handleAllComplete = useCallback(() => {
+    const handleAllComplete = useCallback(async () => {
         console.log('All pages processing complete');
         setIsProcessingPDF(false);
         setProcessingPages([]);
@@ -971,11 +1076,42 @@ export default function HomePage() {
         // Clear processing state from localStorage
         localStorage.removeItem('processing-state');
 
-        // No need to refresh documents - they're already updated via onPageComplete
-        console.log(
-            'Processing complete - documents already updated via page completion callbacks',
-        );
-    }, []);
+        // Mark the uploadingFile as completed and remove after delay
+        const batchSession =
+            typeof window !== 'undefined'
+                ? localStorage.getItem('batch-session')
+                : null;
+        if (batchSession) {
+            const session = JSON.parse(batchSession);
+            if (session.uploadFileId) {
+                setUploadingFiles(prev =>
+                    prev.map(f =>
+                        f.id === session.uploadFileId
+                            ? {
+                                  ...f,
+                                  progress: 100,
+                                  status: 'completed',
+                                  message: 'All pages completed!',
+                              }
+                            : f,
+                    ),
+                );
+
+                // Remove from uploadingFiles after 5 seconds
+                setTimeout(() => {
+                    setUploadingFiles(prev =>
+                        prev.filter(f => f.id !== session.uploadFileId),
+                    );
+                }, 5000);
+            }
+            localStorage.removeItem('batch-session');
+        }
+
+        // Refresh documents list from backend to ensure all documents are loaded
+        console.log('Reloading documents from backend after completion...');
+        await loadDocuments();
+        await loadDocumentCounts();
+    }, [loadDocuments, loadDocumentCounts]);
 
     const handleCellEdit = async (
         docId: string,
@@ -1324,11 +1460,12 @@ export default function HomePage() {
                                                 </h3>
                                                 <p className="text-sm text-amber-700">
                                                     Found unfinished processing
-                                                    for "
+                                                    for &quot;
                                                     {
                                                         pdfSession.originalFileName
                                                     }
-                                                    " ({pdfSession.pageCount}{' '}
+                                                    &quot; (
+                                                    {pdfSession.pageCount}{' '}
                                                     pages)
                                                 </p>
                                             </div>
@@ -1386,6 +1523,7 @@ export default function HomePage() {
                             {(['Rebut', 'NPT', 'Kosu'] as DocumentType[]).map(
                                 type => {
                                     const isSelected = selectedType === type;
+                                    const isClickable = !isProcessingPDF && !isUploading;
                                     const config = {
                                         Rebut: {
                                             color: 'blue',
@@ -1424,8 +1562,9 @@ export default function HomePage() {
                                         <button
                                             key={type}
                                             onClick={() => {
+                                                console.log(`🔄 User clicked ${type} tab`);
                                                 setSelectedType(type);
-                                                setDocuments([]);
+                                                setDocuments([]); // Clear immediately for visual feedback
                                             }}
                                             className={`
                                                 flex-1 sm:flex-none px-3 sm:px-4 py-2 sm:py-3 rounded-lg font-medium text-sm sm:text-base
@@ -1526,146 +1665,6 @@ export default function HomePage() {
                     </div>
                 </div>
 
-                {/* Upload Progress List */}
-                {uploadingFiles.length > 0 && (
-                    <div className="mb-6 bg-white rounded-xl shadow-lg border border-gray-200 p-4">
-                        <h3 className="text-lg font-semibold text-gray-800 mb-4">
-                            Processing Files
-                        </h3>
-                        <div className="space-y-4">
-                            {uploadingFiles.map(file => (
-                                <div
-                                    key={file.id}
-                                    className="border border-gray-200 rounded-lg p-4"
-                                >
-                                    {/* File Header */}
-                                    <div className="flex items-center justify-between mb-3">
-                                        <span
-                                            className="font-medium text-gray-800 truncate max-w-xs"
-                                            title={file.name}
-                                        >
-                                            {file.name}
-                                            {file.totalPages &&
-                                                file.totalPages > 1 && (
-                                                    <span className="text-xs text-gray-500 ml-2">
-                                                        ({file.totalPages}{' '}
-                                                        pages)
-                                                    </span>
-                                                )}
-                                        </span>
-                                        <div className="flex items-center gap-2">
-                                            {file.status === 'uploading' && (
-                                                <div className="animate-spin rounded-full h-4 w-4 border-2 border-blue-600 border-t-transparent"></div>
-                                            )}
-                                            <span
-                                                className={`text-sm font-medium ${
-                                                    file.status === 'completed'
-                                                        ? 'text-green-600'
-                                                        : file.status ===
-                                                            'error'
-                                                          ? 'text-red-600'
-                                                          : 'text-blue-600'
-                                                }`}
-                                            >
-                                                {file.progress}%
-                                            </span>
-                                        </div>
-                                    </div>
-
-                                    {/* Overall Progress Bar */}
-                                    <div className="w-full bg-gray-200 rounded-full h-2 mb-3">
-                                        <div
-                                            className={`h-2 rounded-full transition-all duration-500 ease-out ${
-                                                file.status === 'completed'
-                                                    ? 'bg-green-500'
-                                                    : file.status === 'error'
-                                                      ? 'bg-red-500'
-                                                      : 'bg-blue-600'
-                                            }`}
-                                            style={{
-                                                width: `${file.progress}%`,
-                                            }}
-                                        ></div>
-                                    </div>
-
-                                    {/* Status Message */}
-                                    <div
-                                        className={`text-sm mb-2 ${
-                                            file.status === 'completed'
-                                                ? 'text-green-600'
-                                                : file.status === 'error'
-                                                  ? 'text-red-600'
-                                                  : 'text-gray-600'
-                                        }`}
-                                    >
-                                        {file.message}
-                                        {file.currentPage &&
-                                            file.totalPages && (
-                                                <span className="text-blue-600 font-medium ml-1">
-                                                    (Page {file.currentPage}/
-                                                    {file.totalPages})
-                                                </span>
-                                            )}
-                                    </div>
-
-                                    {/* Page Progress Details */}
-                                    {file.pageResults &&
-                                        file.pageResults.length > 1 && (
-                                            <div className="mt-3 bg-gray-50 rounded-lg p-3">
-                                                <div className="text-xs font-medium text-gray-700 mb-2">
-                                                    Page Processing Status:
-                                                </div>
-                                                <div className="flex flex-wrap gap-2">
-                                                    {file.pageResults.map(
-                                                        (page, index) => (
-                                                            <div
-                                                                key={index}
-                                                                className={`flex items-center gap-1 px-2 py-1 rounded text-xs ${
-                                                                    page.status ===
-                                                                    'completed'
-                                                                        ? 'bg-green-100 text-green-700'
-                                                                        : page.status ===
-                                                                            'error'
-                                                                          ? 'bg-red-100 text-red-700'
-                                                                          : page.status ===
-                                                                              'processing'
-                                                                            ? 'bg-blue-100 text-blue-700'
-                                                                            : 'bg-gray-100 text-gray-600'
-                                                                }`}
-                                                            >
-                                                                {page.status ===
-                                                                    'processing' && (
-                                                                    <div className="animate-spin rounded-full h-2 w-2 border border-blue-600 border-t-transparent"></div>
-                                                                )}
-                                                                <span>
-                                                                    Page{' '}
-                                                                    {
-                                                                        page.pageNumber
-                                                                    }
-                                                                </span>
-                                                                {page.status ===
-                                                                    'completed' && (
-                                                                    <span>
-                                                                        ✓
-                                                                    </span>
-                                                                )}
-                                                                {page.status ===
-                                                                    'error' && (
-                                                                    <span>
-                                                                        ✗
-                                                                    </span>
-                                                                )}
-                                                            </div>
-                                                        ),
-                                                    )}
-                                                </div>
-                                            </div>
-                                        )}
-                                </div>
-                            ))}
-                        </div>
-                    </div>
-                )}
 
                 {/* Page Processing Component */}
                 {processingPages.length > 0 && (

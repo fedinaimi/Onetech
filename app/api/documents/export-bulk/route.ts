@@ -5,13 +5,10 @@
 
 import { NextResponse } from 'next/server';
 
-const BACKEND_API_URL =
-    process.env.NEXT_PUBLIC_BACKEND_URL || 'http://127.0.0.1:8000';
-
 export async function POST(request: Request) {
     try {
         const body = await request.json();
-        const { type, format = 'csv', dateFrom, dateTo, searchQuery } = body;
+        const { type, format = 'csv' } = body;
 
         console.log('[EXPORT] Request body:', body);
 

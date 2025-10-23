@@ -58,7 +58,7 @@ export default function PageProcessor({
     );
     const pollingIntervalRef = useRef<NodeJS.Timeout | null>(null);
     const currentPollingSessionRef = useRef<string | null>(null);
-    const [isInitialized, setIsInitialized] = useState(false);
+    const [, setIsInitialized] = useState(false);
 
     // Stop all polling activity
     const stopPolling = useCallback(() => {

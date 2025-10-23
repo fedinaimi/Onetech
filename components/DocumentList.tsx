@@ -4,9 +4,11 @@ import {
     ChevronDown,
     ChevronLeft,
     ChevronRight,
+    ChevronUp,
     Download,
     Edit2,
     FileText,
+    Folder,
     FolderOpen,
     List,
     Loader2,
@@ -20,7 +22,8 @@ import {
 } from 'lucide-react';
 import React, { Fragment, useMemo, useState } from 'react';
 
-type ViewMode = 'list' | 'table';
+type ViewMode = 'list' | 'table' | 'grouped';
+type SortOption = 'name-asc' | 'name-desc' | 'date-asc' | 'date-desc';
 
 interface Props {
     documents: any[];
@@ -55,8 +58,10 @@ export default function DocumentList({
     saveRename,
     cancelRename,
 }: Props) {
-    const [viewMode, setViewMode] = useState<ViewMode>('list');
+    const [viewMode, setViewMode] = useState<ViewMode>('grouped');
+    const [sortOption, setSortOption] = useState<SortOption>('date-desc');
     const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
+    const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
     const [currentPage, setCurrentPage] = useState(1);
     const [itemsPerPage, setItemsPerPage] = useState(5);
     const [searchQuery, setSearchQuery] = useState('');
@@ -73,6 +78,18 @@ export default function DocumentList({
     );
     const [bulkDeleteDialog, setBulkDeleteDialog] = useState(false);
     const [isBulkDeleting, setIsBulkDeleting] = useState(false);
+
+    // Helper function to extract base filename from document
+    const getBaseFilename = (doc: any): string => {
+        const filename = doc.metadata?.original_filename || doc.metadata?.filename || '';
+        
+        // Remove file extension
+        const withoutExt = filename.replace(/\.(pdf|png|jpg|jpeg|gif|bmp|tiff|webp)$/i, '');
+        
+        // Extract base name (remove _page_X_timestamp pattern)
+        const match = withoutExt.match(/^(.+?)(?:_page_\d+(?:_\d+)?)?$/);
+        return match ? match[1] : withoutExt;
+    };
 
     // Filter documents based on search and date filters
     const filteredDocuments = useMemo(() => {
@@ -107,18 +124,145 @@ export default function DocumentList({
         });
     }, [documents, searchQuery, dateFrom, dateTo]);
 
-    // Pagination calculations
+    // Sort filtered documents with page number awareness
+    const sortedDocuments = useMemo(() => {
+        const sorted = [...filteredDocuments];
+        
+        switch (sortOption) {
+            case 'name-asc':
+                sorted.sort((a, b) => {
+                    const nameA = getBaseFilename(a);
+                    const nameB = getBaseFilename(b);
+                    const nameCompare = nameA.localeCompare(nameB);
+                    
+                    // If same base filename, sort by page number
+                    if (nameCompare === 0) {
+                        const pageA = a.metadata?.page_number || 0;
+                        const pageB = b.metadata?.page_number || 0;
+                        return pageA - pageB;
+                    }
+                    return nameCompare;
+                });
+                break;
+            case 'name-desc':
+                sorted.sort((a, b) => {
+                    const nameA = getBaseFilename(a);
+                    const nameB = getBaseFilename(b);
+                    const nameCompare = nameB.localeCompare(nameA);
+                    
+                    // If same base filename, sort by page number
+                    if (nameCompare === 0) {
+                        const pageA = a.metadata?.page_number || 0;
+                        const pageB = b.metadata?.page_number || 0;
+                        return pageA - pageB;
+                    }
+                    return nameCompare;
+                });
+                break;
+            case 'date-asc':
+                sorted.sort((a, b) => {
+                    const dateA = new Date(a.metadata?.processed_at || a.created_at);
+                    const dateB = new Date(b.metadata?.processed_at || b.created_at);
+                    const dateCompare = dateA.getTime() - dateB.getTime();
+                    
+                    // If same date, sort by base filename then page number
+                    if (dateCompare === 0) {
+                        const nameA = getBaseFilename(a);
+                        const nameB = getBaseFilename(b);
+                        const nameCompare = nameA.localeCompare(nameB);
+                        if (nameCompare === 0) {
+                            const pageA = a.metadata?.page_number || 0;
+                            const pageB = b.metadata?.page_number || 0;
+                            return pageA - pageB;
+                        }
+                        return nameCompare;
+                    }
+                    return dateCompare;
+                });
+                break;
+            case 'date-desc':
+            default:
+                sorted.sort((a, b) => {
+                    const dateA = new Date(a.metadata?.processed_at || a.created_at);
+                    const dateB = new Date(b.metadata?.processed_at || b.created_at);
+                    const dateCompare = dateB.getTime() - dateA.getTime();
+                    
+                    // If same date, sort by base filename then page number
+                    if (dateCompare === 0) {
+                        const nameA = getBaseFilename(a);
+                        const nameB = getBaseFilename(b);
+                        const nameCompare = nameA.localeCompare(nameB);
+                        if (nameCompare === 0) {
+                            const pageA = a.metadata?.page_number || 0;
+                            const pageB = b.metadata?.page_number || 0;
+                            return pageA - pageB;
+                        }
+                        return nameCompare;
+                    }
+                    return dateCompare;
+                });
+                break;
+        }
+        
+        return sorted;
+    }, [filteredDocuments, sortOption]);
+
+    // Group documents by base filename
+    const groupedDocuments = useMemo(() => {
+        const groups = new Map<string, any[]>();
+        
+        sortedDocuments.forEach(doc => {
+            const baseFilename = getBaseFilename(doc);
+            if (!groups.has(baseFilename)) {
+                groups.set(baseFilename, []);
+            }
+            groups.get(baseFilename)!.push(doc);
+        });
+        
+        // Convert to array and add metadata
+        return Array.from(groups.entries()).map(([baseName, docs]) => {
+            // Sort documents within group by page number
+            const sortedDocs = docs.sort((a, b) => {
+                const pageA = a.metadata?.page_number || 0;
+                const pageB = b.metadata?.page_number || 0;
+                return pageA - pageB;
+            });
+            
+            // Get earliest and latest dates in group
+            const dates = sortedDocs.map(d => new Date(d.metadata?.processed_at || d.created_at));
+            const earliestDate = new Date(Math.min(...dates.map(d => d.getTime())));
+            const latestDate = new Date(Math.max(...dates.map(d => d.getTime())));
+            
+            return {
+                baseName,
+                documents: sortedDocs,
+                count: sortedDocs.length,
+                earliestDate,
+                latestDate,
+                totalSize: sortedDocs.reduce((sum, d) => sum + (d.metadata?.file_size || 0), 0),
+            };
+        });
+    }, [sortedDocuments]);
+
+    // Pagination calculations (works for both grouped and ungrouped)
     const paginatedData = useMemo(() => {
         const startIndex = (currentPage - 1) * itemsPerPage;
         const endIndex = startIndex + itemsPerPage;
-        return filteredDocuments.slice(startIndex, endIndex);
-    }, [filteredDocuments, currentPage, itemsPerPage]);
+        
+        if (viewMode === 'grouped') {
+            return groupedDocuments.slice(startIndex, endIndex);
+        } else {
+            return sortedDocuments.slice(startIndex, endIndex);
+        }
+    }, [viewMode, groupedDocuments, sortedDocuments, currentPage, itemsPerPage]);
 
-    const totalPages = Math.ceil(filteredDocuments.length / itemsPerPage);
+    const totalPages = Math.ceil(
+        (viewMode === 'grouped' ? groupedDocuments.length : sortedDocuments.length) / itemsPerPage
+    );
     const startItem = (currentPage - 1) * itemsPerPage + 1;
     const endItem = Math.min(
         currentPage * itemsPerPage,
-        filteredDocuments.length,
+        viewMode === 'grouped' ? groupedDocuments.length : sortedDocuments.length,
     );
 
     const handlePageChange = (page: number) => {
@@ -150,6 +294,28 @@ export default function DocumentList({
         setCurrentPage(1);
     };
 
+    const toggleGroup = (baseName: string) => {
+        setExpandedGroups(prev => {
+            const newSet = new Set(prev);
+            if (newSet.has(baseName)) {
+                newSet.delete(baseName);
+            } else {
+                newSet.add(baseName);
+            }
+            return newSet;
+        });
+    };
+
+    const toggleAllGroups = () => {
+        if (expandedGroups.size === groupedDocuments.length) {
+            // Collapse all
+            setExpandedGroups(new Set());
+        } else {
+            // Expand all
+            setExpandedGroups(new Set(groupedDocuments.map(g => g.baseName)));
+        }
+    };
+
     const getDocumentTypeColor = (type: string) => {
         const colors = {
             Rebut: 'blue',
@@ -161,7 +327,12 @@ export default function DocumentList({
 
     const color = getDocumentTypeColor(selectedType);
 
-    const formatFileSize = (bytes: number) => {
+    const formatFileSize = (bytes: number | null | undefined) => {
+        // Handle null, undefined, NaN, or 0
+        if (!bytes || isNaN(bytes) || bytes === 0) {
+            return '—';
+        }
+        
         if (bytes < 1024) return bytes + ' B';
         if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
         return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
@@ -406,11 +577,55 @@ export default function DocumentList({
                                 label="List"
                             />
                             <ViewModeButton
+                                mode="grouped"
+                                icon={Folder}
+                                label="Grouped"
+                            />
+                            <ViewModeButton
                                 mode="table"
                                 icon={Table}
                                 label="Table"
                             />
                         </div>
+                    )}
+
+                    {/* Sort Options */}
+                    {documents.length > 0 && (
+                        <div className="flex items-center space-x-2 bg-white rounded-lg px-3 py-2 shadow-sm border border-gray-200">
+                            <span className="text-sm font-medium text-gray-700 whitespace-nowrap">
+                                Sort:
+                            </span>
+                            <select
+                                value={sortOption}
+                                onChange={(e) => setSortOption(e.target.value as SortOption)}
+                                className="text-sm border-0 bg-transparent focus:ring-0 cursor-pointer text-gray-700 font-medium"
+                            >
+                                <option value="date-desc">Date (Newest First)</option>
+                                <option value="date-asc">Date (Oldest First)</option>
+                                <option value="name-asc">Name (A-Z)</option>
+                                <option value="name-desc">Name (Z-A)</option>
+                            </select>
+                        </div>
+                    )}
+
+                    {/* Expand/Collapse All for Grouped View */}
+                    {documents.length > 0 && viewMode === 'grouped' && groupedDocuments.length > 0 && (
+                        <button
+                            onClick={toggleAllGroups}
+                            className="flex items-center space-x-2 px-3 py-2 bg-white rounded-lg shadow-sm border border-gray-200 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
+                        >
+                            {expandedGroups.size === groupedDocuments.length ? (
+                                <>
+                                    <ChevronUp className="h-4 w-4" />
+                                    <span className="hidden sm:inline">Collapse All</span>
+                                </>
+                            ) : (
+                                <>
+                                    <ChevronDown className="h-4 w-4" />
+                                    <span className="hidden sm:inline">Expand All</span>
+                                </>
+                            )}
+                        </button>
                     )}
 
                     {isLoading && (
@@ -897,6 +1112,178 @@ export default function DocumentList({
                                                 {renderTableData(doc)}
                                             </div>
                                         ) : null}
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    )}
+
+                    {/* Grouped View - with full list design for each document */}
+                    {viewMode === 'grouped' && (
+                        <div className="space-y-4">
+                            {paginatedData.map((group: any) => {
+                                const isGroupExpanded = expandedGroups.has(group.baseName);
+                                const FolderIcon = isGroupExpanded ? FolderOpen : Folder;
+                                
+                                return (
+                                    <div
+                                        key={group.baseName}
+                                        className="bg-white rounded-lg shadow border border-gray-200 overflow-hidden"
+                                    >
+                                        {/* Group Header */}
+                                        <div
+                                            onClick={() => toggleGroup(group.baseName)}
+                                            className={`px-4 py-3 sm:px-6 sm:py-4 cursor-pointer hover:bg-${color}-50 transition-colors border-l-4 ${
+                                                isGroupExpanded ? `border-${color}-500 bg-${color}-50` : 'border-gray-300'
+                                            }`}
+                                        >
+                                            <div className="flex items-center justify-between">
+                                                <div className="flex items-center space-x-3 flex-1 min-w-0">
+                                                    <FolderIcon className={`h-5 w-5 sm:h-6 sm:w-6 flex-shrink-0 ${
+                                                        isGroupExpanded ? `text-${color}-600` : 'text-gray-500'
+                                                    }`} />
+                                                    <div className="flex-1 min-w-0">
+                                                        <h3 className="text-base sm:text-lg font-bold text-gray-900 truncate">
+                                                            📁 {group.baseName}
+                                                        </h3>
+                                                        <div className="flex flex-wrap items-center gap-2 mt-1 text-xs sm:text-sm text-gray-600">
+                                                            <span className={`flex items-center space-x-1 font-semibold text-${color}-700`}>
+                                                                <FileText className="h-3 w-3 sm:h-4 sm:w-4" />
+                                                                <span>{group.count} page{group.count > 1 ? 's' : ''}</span>
+                                                            </span>
+                                                            <span>•</span>
+                                                            <span className="flex items-center space-x-1">
+                                                                <Calendar className="h-3 w-3 sm:h-4 sm:w-4" />
+                                                                <span>{group.earliestDate.toLocaleDateString()}</span>
+                                                            </span>
+                                                            {group.totalSize > 0 && (
+                                                                <>
+                                                                    <span>•</span>
+                                                                    <span className="font-medium">{formatFileSize(group.totalSize)}</span>
+                                                                </>
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                                <ChevronDown
+                                                    className={`h-5 w-5 text-gray-400 transition-transform duration-200 flex-shrink-0 ${
+                                                        isGroupExpanded ? 'transform rotate-180' : ''
+                                                    }`}
+                                                />
+                                            </div>
+                                        </div>
+
+                                        {/* Group Documents - Using same design as List View */}
+                                        {isGroupExpanded && (
+                                            <div className="bg-gray-50 p-2 space-y-2">
+                                                {group.documents.map((doc: any) => {
+                                                    const isDocExpanded = expandedRows.has(doc.id);
+                                                    return (
+                                                        <div
+                                                            key={doc.id}
+                                                            className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden hover:shadow-md transition-shadow"
+                                                        >
+                                                            <div className="p-4">
+                                                                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between space-y-3 sm:space-y-0">
+                                                                    <div className="flex items-center space-x-3">
+                                                                        {/* Selection Checkbox */}
+                                                                        <button
+                                                                            onClick={() => handleSelectDocument(doc.id)}
+                                                                            className="flex-shrink-0 p-1 hover:bg-gray-100 rounded transition-colors"
+                                                                            title={selectedDocuments.has(doc.id) ? 'Deselect document' : 'Select document'}
+                                                                        >
+                                                                            {selectedDocuments.has(doc.id) ? (
+                                                                                <CheckSquare className="h-5 w-5 text-blue-600" />
+                                                                            ) : (
+                                                                                <Square className="h-5 w-5 text-gray-400 hover:text-gray-600" />
+                                                                            )}
+                                                                        </button>
+
+                                                                        <div className={`p-2 bg-${color}-100 rounded-lg`}>
+                                                                            <FileText className={`h-5 w-5 text-${color}-600`} />
+                                                                        </div>
+                                                                        <div className="flex-1 min-w-0">
+                                                                            <div className="flex items-center space-x-2 mb-1">
+                                                                                <span className="flex-shrink-0 text-xs font-bold text-white bg-gradient-to-r from-blue-500 to-blue-600 px-2 py-1 rounded shadow-sm">
+                                                                                    Page {doc.metadata?.page_number || 1}
+                                                                                </span>
+                                                                                <h3 className="font-semibold text-gray-900 text-sm truncate">
+                                                                                    {doc.metadata.filename}
+                                                                                </h3>
+                                                                            </div>
+                                                                            <div className="flex flex-col sm:flex-row sm:items-center sm:space-x-4 text-sm text-gray-500 space-y-1 sm:space-y-0">
+                                                                                <span>{new Date(doc.metadata.processed_at).toLocaleDateString()}</span>
+                                                                                <span>{formatFileSize(doc.metadata.file_size)}</span>
+                                                                                <span className={`inline-flex px-2 py-1 rounded-full text-xs font-medium ${
+                                                                                    doc.updated_by_user ? 'bg-orange-100 text-orange-700' : 'bg-green-100 text-green-700'
+                                                                                }`}>
+                                                                                    {doc.updated_by_user ? 'Modified' : 'Original'}
+                                                                                </span>
+                                                                            </div>
+                                                                        </div>
+                                                                    </div>
+                                                                    <div className="flex items-center space-x-2">
+                                                                        {renderTableData && (
+                                                                            <button
+                                                                                onClick={() => toggleRowExpansion(doc.id)}
+                                                                                className="flex items-center space-x-1 px-3 py-1.5 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors text-sm"
+                                                                            >
+                                                                                {isDocExpanded ? (
+                                                                                    <ChevronDown className="h-4 w-4" />
+                                                                                ) : (
+                                                                                    <ChevronRight className="h-4 w-4" />
+                                                                                )}
+                                                                                <span>Fields</span>
+                                                                            </button>
+                                                                        )}
+
+                                                                        {/* Document Action Button */}
+                                                                        {(() => {
+                                                                            const buttonConfig = getDocumentActionButton(doc);
+                                                                            const Icon = buttonConfig.icon;
+                                                                            return (
+                                                                                <button
+                                                                                    onClick={buttonConfig.action}
+                                                                                    className={buttonConfig.className}
+                                                                                    title={buttonConfig.text}
+                                                                                >
+                                                                                    <Icon className="h-4 w-4" />
+                                                                                    <span>{buttonConfig.text}</span>
+                                                                                </button>
+                                                                            );
+                                                                        })()}
+
+                                                                        {onDeleteDocument && (
+                                                                            <button
+                                                                                onClick={() => handleDeleteClick(doc)}
+                                                                                disabled={isDeleting === doc.id}
+                                                                                className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                                                                                title="Delete document"
+                                                                            >
+                                                                                {isDeleting === doc.id ? (
+                                                                                    <Loader2 className="h-4 w-4 animate-spin" />
+                                                                                ) : (
+                                                                                    <Trash2 className="h-4 w-4" />
+                                                                                )}
+                                                                            </button>
+                                                                        )}
+                                                                    </div>
+                                                                </div>
+                                                            </div>
+
+                                                            {/* Expanded Data Table */}
+                                                            {isDocExpanded && renderTableData && (
+                                                                <div className="border-t border-gray-200 bg-gray-50 p-4">
+                                                                    <div className="text-sm text-gray-700">
+                                                                        {renderTableData(doc)}
+                                                                    </div>
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                    );
+                                                })}
+                                            </div>
+                                        )}
                                     </div>
                                 );
                             })}

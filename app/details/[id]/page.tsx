@@ -4,15 +4,16 @@ import DocumentDetailsModal from '@/components/DocumentDetailsModal';
 import { GenericDocument } from '@/types/document';
 import { ArrowLeft } from 'lucide-react';
 import { useRouter } from 'next/navigation';
-import { useEffect, useState } from 'react';
+import { use, useEffect, useState } from 'react';
 
 interface DetailPageProps {
-    params: {
+    params: Promise<{
         id: string;
-    };
+    }>;
 }
 
-export default function DetailPage({ params }: DetailPageProps) {
+export default function DetailPage(props: DetailPageProps) {
+    const params = use(props.params);
     const router = useRouter();
     const [document, setDocument] = useState<GenericDocument | null>(null);
     const [loading, setLoading] = useState(true);

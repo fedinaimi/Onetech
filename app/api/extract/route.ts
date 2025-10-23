@@ -15,15 +15,10 @@ const ONETECH_API_URL =
 const BACKEND_URL =
     process.env.NEXT_PUBLIC_BACKEND_URL || 'http://127.0.0.1:8000';
 
-type DocumentType = 'Rebut' | 'NPT' | 'Kosu';
-
 /**
  * Helper function to save document to backend
  */
-async function saveDocumentToBackend(
-    document: any,
-    documentType: DocumentType,
-) {
+async function saveDocumentToBackend(document: any) {
     try {
         const response = await fetch(`${BACKEND_URL}/documents/`, {
             method: 'POST',
@@ -191,10 +186,8 @@ async function processPageWithExternalAPI(
 
         // Save to backend database
         try {
-            const savedDocument = await saveDocumentToBackend(
-                formattedDocument,
-                documentType as DocumentType,
-            );
+            const savedDocument =
+                await saveDocumentToBackend(formattedDocument);
             console.log(
                 `Page ${pageNumber} - Document saved to database:`,
                 savedDocument.id,
@@ -314,10 +307,8 @@ async function processImageDirectly(
 
         // Save the document to backend
         try {
-            const savedDocument = await saveDocumentToBackend(
-                formattedDocument,
-                documentType as DocumentType,
-            );
+            const savedDocument =
+                await saveDocumentToBackend(formattedDocument);
 
             console.log(
                 `✅ Image processed and saved successfully: ${savedDocument.id}`,
