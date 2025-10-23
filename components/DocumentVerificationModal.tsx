@@ -144,12 +144,17 @@ export const DocumentVerificationModal: React.FC<
             currentValue = currentValue[path];
         }
 
-        await handleCellEdit(
-            editingCell.doc,
-            editingCell.field,
-            currentValue,
-            editValue,
-        );
+        try {
+            await handleCellEdit(
+                editingCell.doc,
+                editingCell.field,
+                currentValue,
+                editValue,
+            );
+        } catch (error) {
+            console.error('Error saving field in modal:', error);
+            // Optionally show error message to user
+        }
     };
 
     const handleSaveDraft = async () => {

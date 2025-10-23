@@ -1128,6 +1128,8 @@ export default function HomePage() {
         newValue: any,
     ) => {
         try {
+            console.log('Updating field:', { docId, field, oldValue, newValue });
+            
             const response = await axios.put('/api/documents', {
                 id: docId,
                 type: selectedType,
@@ -1137,6 +1139,8 @@ export default function HomePage() {
             });
 
             if (response.status >= 200 && response.status < 300) {
+                console.log('Field updated successfully');
+                
                 // Update the documents list
                 await loadDocuments();
 
@@ -1183,9 +1187,13 @@ export default function HomePage() {
                 }
 
                 setEditingCell(null);
+            } else {
+                console.error('Failed to update field:', response.status, response.data);
+                throw new Error(`Failed to update field: ${response.status}`);
             }
         } catch (error) {
             console.error('Error updating document:', error);
+            throw error; // Re-throw to be handled by the calling component
         }
     };
 

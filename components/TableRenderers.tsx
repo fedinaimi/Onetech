@@ -93,10 +93,17 @@ const EditableField: React.FC<EditableFieldProps> = ({
         if (localValue !== editValue) {
             setIsSaving(true);
             setEditValue(localValue);
-            await saveEdit();
-            setIsSaving(false);
-            setShowSaved(true);
-            setTimeout(() => setShowSaved(false), 2000);
+            try {
+                await saveEdit();
+                setIsSaving(false);
+                setShowSaved(true);
+                setTimeout(() => setShowSaved(false), 2000);
+            } catch (error) {
+                console.error('Error saving field:', error);
+                setIsSaving(false);
+                // Show error state
+                setShowSaved(false);
+            }
         }
     }, [localValue, editValue, setEditValue, saveEdit]);
 
@@ -149,13 +156,18 @@ const EditableField: React.FC<EditableFieldProps> = ({
                                 setEditingCell(null);
                             }
                         }}
-                        onBlur={() => {
+                        onBlur={async () => {
                             // Save on blur
                             if (saveTimeoutRef.current) {
                                 clearTimeout(saveTimeoutRef.current);
                             }
-                            autoSave();
-                            setTimeout(() => setEditingCell(null), 100);
+                            try {
+                                await autoSave();
+                                setTimeout(() => setEditingCell(null), 100);
+                            } catch (error) {
+                                console.error('Error saving on blur:', error);
+                                setEditingCell(null);
+                            }
                         }}
                         placeholder="Enter value..."
                     />
