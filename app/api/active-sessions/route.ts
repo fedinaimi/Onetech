@@ -2,8 +2,11 @@ import { NextResponse } from 'next/server';
 
 export async function GET() {
     try {
+        // Use BACKEND_URL for server-side calls (Docker network) or fallback to public URL
         const BACKEND_URL =
-            process.env.NEXT_PUBLIC_BACKEND_URL || 'http://127.0.0.1:8000';
+            process.env.BACKEND_URL ||
+            process.env.NEXT_PUBLIC_BACKEND_URL ||
+            'http://127.0.0.1:8000';
 
         // Try to get active sessions from backend
         const response = await fetch(`${BACKEND_URL}/batch/sessions/`, {

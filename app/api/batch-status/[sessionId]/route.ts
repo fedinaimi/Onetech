@@ -24,8 +24,11 @@ export async function GET(
         console.log(`Fetching status for session: ${sessionId}`);
 
         // Call backend status endpoint
+        // Use BACKEND_URL for server-side calls (Docker network) or fallback to public URL
         const backendUrl =
-            process.env.NEXT_PUBLIC_BACKEND_URL || 'http://127.0.0.1:8000';
+            process.env.BACKEND_URL ||
+            process.env.NEXT_PUBLIC_BACKEND_URL ||
+            'http://127.0.0.1:8000';
         const response = await fetch(
             `${backendUrl}/batch/status/${sessionId}/`,
             {
