@@ -43,7 +43,8 @@ export default function PageProcessor({
     );
 
     // Fix relative URLs by adding backend URL prefix
-    const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://127.0.0.1:8000';
+    const backendUrl =
+        process.env.NEXT_PUBLIC_BACKEND_URL || 'http://127.0.0.1:8000';
     const fixedImageUrls = pages.map(p => {
         if (p.imageDataUrl && p.imageDataUrl.startsWith('/media/')) {
             // Convert relative URL to absolute URL
