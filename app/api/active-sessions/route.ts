@@ -5,9 +5,9 @@ export async function GET() {
         const BACKEND_URL =
             process.env.NEXT_PUBLIC_BACKEND_URL || 'http://127.0.0.1:8000';
 
-        // Try to get active sessions from backend
+        // Try to get active sessions from backend (uses new persistent session endpoint)
         const response = await fetch(
-            `${BACKEND_URL}/extraction/batch-sessions/`,
+            `${BACKEND_URL}/batch/active/`,
             {
                 method: 'GET',
                 headers: {
