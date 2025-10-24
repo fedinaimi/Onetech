@@ -9,7 +9,7 @@ export async function POST(request: NextRequest) {
         if (!file) {
             return NextResponse.json(
                 { error: 'No file provided' },
-                { status: 400 }
+                { status: 400 },
             );
         }
 
@@ -34,15 +34,15 @@ export async function POST(request: NextRequest) {
             pages,
             totalPages: pages.length,
         });
-
     } catch (error) {
         console.error('❌ Error splitting PDF:', error);
         return NextResponse.json(
-            { 
+            {
                 error: 'Failed to split PDF',
-                message: error instanceof Error ? error.message : 'Unknown error'
+                message:
+                    error instanceof Error ? error.message : 'Unknown error',
             },
-            { status: 500 }
+            { status: 500 },
         );
     }
 }
