@@ -1,8 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 
 // Backend batch status endpoint
-const BACKEND_STATUS_URL =
-    process.env.NEXT_PUBLIC_BACKEND_URL + '/batch/status/';
 
 export async function GET(
     request: NextRequest,
@@ -26,12 +24,17 @@ export async function GET(
         console.log(`Fetching status for session: ${sessionId}`);
 
         // Call backend status endpoint
-        const response = await fetch(`${BACKEND_STATUS_URL}${sessionId}/`, {
-            method: 'GET',
-            headers: {
-                'Content-Type': 'application/json',
+        const backendUrl =
+            process.env.NEXT_PUBLIC_BACKEND_URL || 'http://127.0.0.1:8000';
+        const response = await fetch(
+            `${backendUrl}/batch/status/${sessionId}/`,
+            {
+                method: 'GET',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
             },
-        });
+        );
 
         console.log(`Backend status response: ${response.status}`);
 

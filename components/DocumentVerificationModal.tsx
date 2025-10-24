@@ -590,7 +590,7 @@ export const DocumentVerificationModal: React.FC<
         try {
             const imageUrl = document.imageUrl.startsWith('http')
                 ? document.imageUrl
-                : `${process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8000'}${document.imageUrl}`;
+                : `${process.env.NEXT_PUBLIC_BACKEND_URL || 'http://127.0.0.1:8000'}${document.imageUrl}`;
 
             const response = await fetch(imageUrl);
             const blob = await response.blob();
@@ -1026,7 +1026,7 @@ export const DocumentVerificationModal: React.FC<
                                                     'http',
                                                 )
                                                     ? document.imageUrl
-                                                    : `${process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8000'}${document.imageUrl}`
+                                                    : `${process.env.NEXT_PUBLIC_BACKEND_URL || 'http://127.0.0.1:8000'}${document.imageUrl}`
                                             }
                                             alt="Original document"
                                             className="object-contain rounded-lg shadow-lg transition-transform duration-200 ease-out select-none"
@@ -1061,7 +1061,7 @@ export const DocumentVerificationModal: React.FC<
                                                         'http',
                                                     )
                                                         ? document.imageUrl
-                                                        : `${process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8000'}${document.imageUrl}`,
+                                                        : `${process.env.NEXT_PUBLIC_BACKEND_URL || 'http://127.0.0.1:8000'}${document.imageUrl}`,
                                                 );
                                                 e.currentTarget.style.display =
                                                     'none';

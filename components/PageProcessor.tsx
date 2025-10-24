@@ -58,7 +58,8 @@ export default function PageProcessor({
     );
     const pollingIntervalRef = useRef<NodeJS.Timeout | null>(null);
     const currentPollingSessionRef = useRef<string | null>(null);
-    const [, setIsInitialized] = useState(false);
+    // Remove unused variable to fix ESLint error
+    // const [isInitialized, setIsInitialized] = useState(false);
 
     // Stop all polling activity
     const stopPolling = useCallback(() => {
@@ -489,7 +490,7 @@ export default function PageProcessor({
 
             setProcessingPages(freshPages);
             setBackendSessionId(sessionId);
-            setIsInitialized(true);
+            // setIsInitialized(true); // Commented out since variable is unused
 
             // Start backend status polling
             startBackendStatusPolling(sessionId);
@@ -519,7 +520,7 @@ export default function PageProcessor({
             }));
 
             setProcessingPages(initialPages);
-            setIsInitialized(true);
+            // setIsInitialized(true); // Commented out since variable is unused
 
             // Complete immediately if no backend session
             setTimeout(() => {
@@ -541,7 +542,7 @@ export default function PageProcessor({
 
         setProcessingPages([]);
         setBackendSessionId(null);
-        setIsInitialized(true);
+        // setIsInitialized(true); // Commented out since variable is unused
 
         setTimeout(() => {
             onAllComplete();

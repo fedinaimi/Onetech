@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 
 // Backend batch processing endpoint
-const BACKEND_BATCH_URL = process.env.NEXT_PUBLIC_BACKEND_URL + '/batch/start/';
 
 export async function POST(request: NextRequest) {
     console.log('=== BATCH PROCESSING API CALLED ===');
@@ -39,7 +38,9 @@ export async function POST(request: NextRequest) {
         console.log('Calling backend batch processing endpoint...');
 
         // Call backend batch processing
-        const response = await fetch(BACKEND_BATCH_URL, {
+        const backendUrl =
+            process.env.NEXT_PUBLIC_BACKEND_URL || 'http://127.0.0.1:8000';
+        const response = await fetch(`${backendUrl}/batch/start/`, {
             method: 'POST',
             body: backendFormData,
         });

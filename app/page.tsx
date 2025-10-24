@@ -218,11 +218,10 @@ export default function HomePage() {
         }
     }, []); // Load persisted processing state on mount
     const loadPersistedProcessingState = useCallback(() => {
+        console.log('🔄 loadPersistedProcessingState called');
         try {
-            // First clean up any stuck sessions
-            cleanupStuckSessions();
-
             const savedState = localStorage.getItem('processing-state');
+            console.log('📦 Saved state found:', savedState ? 'YES' : 'NO');
             if (savedState) {
                 const {
                     pages,
@@ -230,11 +229,23 @@ export default function HomePage() {
                     documentType: savedType,
                 } = JSON.parse(savedState);
 
-                // Only restore if there are incomplete pages and it matches current document type
+                // Only restore if there are incomplete pages
                 const incompletePages = pages.filter(
                     (p: any) => p.status !== 'completed',
                 );
-                if (incompletePages.length > 0 && savedType === selectedType) {
+
+                console.log(
+                    `🔍 Checking restoration: ${incompletePages.length} incomplete pages, savedType=${savedType}, currentType=${selectedType}`,
+                );
+
+                if (incompletePages.length > 0) {
+                    // Auto-switch to the saved document type if different
+                    if (savedType !== selectedType) {
+                        console.log(
+                            `🔄 Switching document type from ${selectedType} to ${savedType} for restoration`,
+                        );
+                        setSelectedType(savedType);
+                    }
                     console.log(
                         `📦 Restoring processing state: ${incompletePages.length} incomplete pages (image data will be regenerated)`,
                     );
@@ -254,6 +265,17 @@ export default function HomePage() {
                     setProcessingPages(restoredPages);
                     setIsProcessingPDF(isProcessing);
 
+                    console.log(
+                        `✅ Restored ${restoredPages.length} processing pages:`,
+                        restoredPages.map(p => ({
+                            pageNumber: p.pageNumber,
+                            status: p.status,
+                        })),
+                    );
+                    console.log(
+                        `🔄 Processing state restored: isProcessing=${isProcessing}`,
+                    );
+
                     // Auto-resume processing if there are pending/error pages
                     const pendingPages = restoredPages.filter(
                         p => p.status === 'pending' || p.status === 'error',
@@ -268,9 +290,16 @@ export default function HomePage() {
                         }, 1000);
                     }
                 } else {
+                    console.log(
+                        '📦 No incomplete pages to restore - clearing state',
+                    );
                     // Clear completed or mismatched processing state
                     localStorage.removeItem('processing-state');
                 }
+            } else {
+                console.log(
+                    '📦 No saved processing state found in localStorage',
+                );
             }
 
             // Also check for minimal fallback state
@@ -474,11 +503,11 @@ export default function HomePage() {
             // Allow immediate reload if:
             // 1. Force reload is requested
             // 2. Document type has changed (user clicked different tab)
-            // 3. More than 1 second has passed (reduced from 2 seconds)
+            // 3. More than 5 seconds has passed (increased to prevent excessive calls)
             const shouldLoad =
                 forceReload ||
                 typeChanged ||
-                now - lastLoadTime.current >= 1000;
+                now - lastLoadTime.current >= 5000;
 
             if (!shouldLoad) {
                 console.log('🔄 Throttling loadDocuments call - too frequent');
@@ -583,7 +612,196 @@ export default function HomePage() {
 
         const timer = setTimeout(() => {
             try {
-                // TEMPORARILY DISABLED - loadPersistedProcessingState();
+                console.log('🔄 Starting session recovery process...');
+
+                // Check for active batch session from multiple sources
+                let batchSession = localStorage.getItem('batch-session');
+                console.log(
+                    '🔍 Raw batch session from localStorage:',
+                    batchSession,
+                );
+
+                // If localStorage is empty, try backup sources
+                if (!batchSession) {
+                    console.log(
+                        '🔍 localStorage empty, checking backup sources...',
+                    );
+
+                    // Try sessionStorage backup
+                    batchSession = sessionStorage.getItem(
+                        'batch-session-backup',
+                    );
+                    if (batchSession) {
+                        console.log(
+                            '📦 Found session in sessionStorage backup',
+                        );
+                        // Restore to localStorage
+                        localStorage.setItem('batch-session', batchSession);
+                    }
+
+                    // Try memory backup
+                    if (!batchSession && (window as any).batchSessionBackup) {
+                        console.log('📦 Found session in memory backup');
+                        batchSession = JSON.stringify(
+                            (window as any).batchSessionBackup,
+                        );
+                        // Restore to localStorage
+                        localStorage.setItem('batch-session', batchSession);
+                    }
+                }
+
+                // Also check all storage keys for debugging
+                console.log(
+                    '📦 All localStorage keys:',
+                    Object.keys(localStorage),
+                );
+                console.log(
+                    '📦 All sessionStorage keys:',
+                    Object.keys(sessionStorage),
+                );
+
+                if (batchSession) {
+                    console.log(
+                        '🔍 Found batch session, checking if processing should be restored...',
+                    );
+                    try {
+                        const session = JSON.parse(batchSession);
+                        console.log('📦 Batch session details:', session);
+
+                        // Validate session has required fields
+                        if (!session.sessionId) {
+                            console.log(
+                                '❌ Invalid session: missing sessionId, clearing corrupted session',
+                            );
+                            localStorage.removeItem('batch-session');
+                            sessionStorage.removeItem('batch-session-backup');
+                            if ((window as any).batchSessionBackup) {
+                                delete (window as any).batchSessionBackup;
+                            }
+                            return; // Skip restoration
+                        }
+
+                        // If we have a valid batch session but no processing pages, create dummy pages
+                        if (
+                            session.sessionId &&
+                            session.totalPages &&
+                            processingPages.length === 0
+                        ) {
+                            console.log(
+                                '🔧 Creating placeholder pages for batch session restoration',
+                            );
+                            const placeholderPages: PageData[] = Array.from(
+                                { length: session.totalPages || 25 },
+                                (_, i) => ({
+                                    pageNumber: i + 1,
+                                    fileName: `${session.originalFileName || 'document'}_page_${i + 1}.jpg`,
+                                    mimeType: 'image/jpeg',
+                                    imageDataUrl: '', // Will be populated by backend
+                                    bufferSize: 0,
+                                    status: 'pending' as const,
+                                    extractedData: null,
+                                    error: null,
+                                    retryCount: 0,
+                                }),
+                            );
+
+                            // Switch to the correct document type
+                            if (
+                                session.documentType &&
+                                session.documentType !== selectedType
+                            ) {
+                                console.log(
+                                    `🔄 Switching to document type: ${session.documentType}`,
+                                );
+                                setSelectedType(session.documentType);
+                            }
+
+                            setProcessingPages(placeholderPages);
+                            setIsProcessingPDF(true);
+                            console.log(
+                                `✅ Restored ${placeholderPages.length} placeholder pages for active session`,
+                            );
+                        }
+                    } catch (e) {
+                        console.error('Invalid batch session data:', e);
+                    }
+                } else {
+                    console.log(
+                        '📦 No batch session found - checking for active backend sessions',
+                    );
+
+                    // Try to find any active processing sessions on the backend
+                    // This is a fallback when localStorage is completely cleared
+                    try {
+                        fetch('/api/active-sessions')
+                            .then(response => {
+                                if (response.ok) {
+                                    return response.json();
+                                }
+                                throw new Error('No active sessions endpoint');
+                            })
+                            .then(data => {
+                                if (data.sessions && data.sessions.length > 0) {
+                                    console.log(
+                                        '🔍 Found active backend sessions:',
+                                        data.sessions,
+                                    );
+                                    const activeSession = data.sessions[0]; // Use the most recent one
+
+                                    // Restore session data
+                                    const restoredSession = {
+                                        sessionId: activeSession.session_id,
+                                        timestamp: Date.now(),
+                                        lastProgressTime: Date.now(),
+                                        originalFileName:
+                                            activeSession.filename ||
+                                            'document',
+                                        documentType:
+                                            activeSession.document_type ||
+                                            selectedType,
+                                        totalPages:
+                                            activeSession.total_pages || 25,
+                                    };
+
+                                    // Store in all backup locations
+                                    localStorage.setItem(
+                                        'batch-session',
+                                        JSON.stringify(restoredSession),
+                                    );
+                                    sessionStorage.setItem(
+                                        'batch-session-backup',
+                                        JSON.stringify(restoredSession),
+                                    );
+                                    (window as any).batchSessionBackup =
+                                        restoredSession;
+
+                                    console.log(
+                                        '✅ Restored session from backend:',
+                                        restoredSession.sessionId,
+                                    );
+
+                                    // Trigger page reload to start processing
+                                    setTimeout(() => {
+                                        window.location.reload();
+                                    }, 1000);
+                                } else {
+                                    console.log(
+                                        '📦 No active backend sessions found',
+                                    );
+                                }
+                            })
+                            .catch(error => {
+                                console.log(
+                                    '❌ Error checking active sessions (endpoint may not exist):',
+                                    error.message,
+                                );
+                            });
+                    } catch (error) {
+                        console.log('❌ Error in session recovery:', error);
+                    }
+                }
+
+                loadPersistedProcessingState(); // Re-enabled for proper state restoration
                 const pdfSession = loadPDFSession();
 
                 if (pdfSession) {
@@ -688,18 +906,36 @@ export default function HomePage() {
                     };
                     setUploadingFiles(prev => [...prev, uploadingFile]);
 
-                    // Store session info for PageProcessor polling
+                    // Store session info for PageProcessor polling with multiple backup methods
                     if (typeof window !== 'undefined') {
+                        const sessionData = {
+                            sessionId: sessionId,
+                            timestamp: Date.now(),
+                            lastProgressTime: Date.now(),
+                            originalFileName: file.name,
+                            documentType: selectedType,
+                            totalPages: 1,
+                            uploadFileId: fileId,
+                        };
+
+                        // Primary storage
                         localStorage.setItem(
                             'batch-session',
-                            JSON.stringify({
-                                sessionId: sessionId,
-                                timestamp: Date.now(),
-                                originalFileName: file.name,
-                                documentType: selectedType,
-                                totalPages: 1,
-                                uploadFileId: fileId,
-                            }),
+                            JSON.stringify(sessionData),
+                        );
+
+                        // Backup storage methods
+                        sessionStorage.setItem(
+                            'batch-session-backup',
+                            JSON.stringify(sessionData),
+                        );
+
+                        // Store in memory as well
+                        (window as any).batchSessionBackup = sessionData;
+
+                        console.log(
+                            '💾 Session stored with multiple backup methods:',
+                            sessionId,
                         );
                     }
 
