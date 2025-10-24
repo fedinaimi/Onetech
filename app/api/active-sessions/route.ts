@@ -6,15 +6,12 @@ export async function GET() {
             process.env.NEXT_PUBLIC_BACKEND_URL || 'http://127.0.0.1:8000';
 
         // Try to get active sessions from backend
-        const response = await fetch(
-            `${BACKEND_URL}/extraction/batch-sessions/`,
-            {
-                method: 'GET',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
+        const response = await fetch(`${BACKEND_URL}/batch/sessions/`, {
+            method: 'GET',
+            headers: {
+                'Content-Type': 'application/json',
             },
-        );
+        });
 
         if (response.ok) {
             const data = await response.json();
