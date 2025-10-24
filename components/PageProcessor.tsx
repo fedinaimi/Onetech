@@ -43,10 +43,11 @@ export default function PageProcessor({
     );
 
     // Fix relative URLs by adding backend URL prefix
+    const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://127.0.0.1:8000';
     const fixedImageUrls = pages.map(p => {
         if (p.imageDataUrl && p.imageDataUrl.startsWith('/media/')) {
             // Convert relative URL to absolute URL
-            return `http://127.0.0.1:8000${p.imageDataUrl}`;
+            return `${backendUrl}${p.imageDataUrl}`;
         }
         return p.imageDataUrl;
     });
@@ -255,7 +256,7 @@ export default function PageProcessor({
                                         pageInfo.image_url?.startsWith(
                                             '/media/',
                                         )
-                                            ? `http://127.0.0.1:8000${pageInfo.image_url}`
+                                            ? `${backendUrl}${pageInfo.image_url}`
                                             : pageInfo.image_url ||
                                               page.imageDataUrl, // Update image URL from backend
                                 };
@@ -286,7 +287,7 @@ export default function PageProcessor({
                                         completedDoc?.imageUrl?.startsWith(
                                             '/media/',
                                         )
-                                            ? `http://127.0.0.1:8000${completedDoc.imageUrl}`
+                                            ? `${backendUrl}${completedDoc.imageUrl}`
                                             : completedDoc?.imageUrl ||
                                               page.imageDataUrl, // Update image URL from document
                                 };
