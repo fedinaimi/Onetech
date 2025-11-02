@@ -382,9 +382,21 @@ export const RebutTable: React.FC<TableRendererProps> = ({
                     // Define column order for items table to place "Total scrapped" right after "Reference"
                     const getColumnOrder = () => {
                         const keys = Object.keys(value[0] || {});
-                        if (key === 'items' && keys.includes('reference') && keys.includes('total_scrapped')) {
+                        if (
+                            key === 'items' &&
+                            keys.includes('reference') &&
+                            keys.includes('total_scrapped')
+                        ) {
                             // For items table, reorder to place total_scrapped after reference
-                            const priorityOrder = ['reference', 'total_scrapped', 'reference_fjk', 'designation', 'quantity', 'unit', 'type'];
+                            const priorityOrder = [
+                                'reference',
+                                'total_scrapped',
+                                'reference_fjk',
+                                'designation',
+                                'quantity',
+                                'unit',
+                                'type',
+                            ];
                             const orderedKeys: string[] = [];
                             const remainingKeys = new Set(keys);
 
@@ -423,24 +435,19 @@ export const RebutTable: React.FC<TableRendererProps> = ({
                                 <table className="min-w-full divide-y divide-gray-200">
                                     <thead className="bg-gradient-to-r from-gray-100 to-gray-200">
                                         <tr>
-                                            {orderedKeys.map(
-                                                subKey => (
-                                                    <th
-                                                        key={subKey}
-                                                        className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider border-r border-gray-300 last:border-r-0"
-                                                    >
-                                                        {subKey
-                                                            .charAt(0)
-                                                            .toUpperCase() +
-                                                            subKey
-                                                                .slice(1)
-                                                                .replace(
-                                                                    /_/g,
-                                                                    ' ',
-                                                                )}
-                                                    </th>
-                                                ),
-                                            )}
+                                            {orderedKeys.map(subKey => (
+                                                <th
+                                                    key={subKey}
+                                                    className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider border-r border-gray-300 last:border-r-0"
+                                                >
+                                                    {subKey
+                                                        .charAt(0)
+                                                        .toUpperCase() +
+                                                        subKey
+                                                            .slice(1)
+                                                            .replace(/_/g, ' ')}
+                                                </th>
+                                            ))}
                                             <th className="px-6 py-3 text-left text-xs font-semibold text-gray-800 uppercase tracking-wider">
                                                 Actions
                                             </th>
@@ -450,52 +457,46 @@ export const RebutTable: React.FC<TableRendererProps> = ({
                                         {value.map(
                                             (item: any, index: number) => (
                                                 <tr key={index}>
-                                                    {orderedKeys.map(
-                                                        subKey => (
-                                                            <td
-                                                                key={subKey}
-                                                                className="px-6 py-4 whitespace-nowrap text-sm text-gray-900"
-                                                            >
-                                                                <EditableField
-                                                                    docId={
-                                                                        doc.id
-                                                                    }
-                                                                    field={`data.${key}.${index}.${subKey}`}
-                                                                    value={
-                                                                        item[
-                                                                            subKey
-                                                                        ]
-                                                                    }
-                                                                    editingCell={
-                                                                        editingCell
-                                                                    }
-                                                                    editValue={
-                                                                        editValue
-                                                                    }
-                                                                    setEditValue={
-                                                                        setEditValue
-                                                                    }
-                                                                    setEditingCell={
-                                                                        setEditingCell
-                                                                    }
-                                                                    startEdit={
-                                                                        startEdit
-                                                                    }
-                                                                    saveEdit={
-                                                                        saveEdit
-                                                                    }
-                                                                    type={
-                                                                        typeof item[
-                                                                            subKey
-                                                                        ] ===
-                                                                        'number'
-                                                                            ? 'number'
-                                                                            : 'text'
-                                                                    }
-                                                                />
-                                                            </td>
-                                                        ),
-                                                    )}
+                                                    {orderedKeys.map(subKey => (
+                                                        <td
+                                                            key={subKey}
+                                                            className="px-6 py-4 whitespace-nowrap text-sm text-gray-900"
+                                                        >
+                                                            <EditableField
+                                                                docId={doc.id}
+                                                                field={`data.${key}.${index}.${subKey}`}
+                                                                value={
+                                                                    item[subKey]
+                                                                }
+                                                                editingCell={
+                                                                    editingCell
+                                                                }
+                                                                editValue={
+                                                                    editValue
+                                                                }
+                                                                setEditValue={
+                                                                    setEditValue
+                                                                }
+                                                                setEditingCell={
+                                                                    setEditingCell
+                                                                }
+                                                                startEdit={
+                                                                    startEdit
+                                                                }
+                                                                saveEdit={
+                                                                    saveEdit
+                                                                }
+                                                                type={
+                                                                    typeof item[
+                                                                        subKey
+                                                                    ] ===
+                                                                    'number'
+                                                                        ? 'number'
+                                                                        : 'text'
+                                                                }
+                                                            />
+                                                        </td>
+                                                    ))}
                                                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                                                         <span className="text-sm text-gray-400">
                                                             —

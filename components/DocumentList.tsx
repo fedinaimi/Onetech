@@ -1753,7 +1753,7 @@ export default function DocumentList({
                 <div className="text-center py-12 sm:py-16 bg-gradient-to-br from-gray-50 to-white rounded-2xl shadow-xl border-2 border-gray-200 overflow-hidden relative">
                     {/* Decorative elements */}
                     <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-blue-500 via-orange-500 to-green-500"></div>
-                    
+
                     <div
                         className={`w-20 h-20 sm:w-24 sm:h-24 mx-auto mb-6 bg-gradient-to-br from-${color}-100 to-${color}-200 rounded-full flex items-center justify-center shadow-lg transform hover:scale-110 transition-transform duration-300`}
                     >
@@ -1772,8 +1772,9 @@ export default function DocumentList({
                             </span>
                         ) : (
                             <>
-                                Upload your first {selectedType.toLowerCase()} document
-                                to get started with AI-powered data extraction.
+                                Upload your first {selectedType.toLowerCase()}{' '}
+                                document to get started with AI-powered data
+                                extraction.
                             </>
                         )}
                     </p>

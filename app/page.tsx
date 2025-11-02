@@ -628,13 +628,9 @@ export default function HomePage() {
                 );
 
                 // Try sessionStorage backup
-                batchSession = sessionStorage.getItem(
-                    'batch-session-backup',
-                );
+                batchSession = sessionStorage.getItem('batch-session-backup');
                 if (batchSession) {
-                    console.log(
-                        '📦 Found session in sessionStorage backup',
-                    );
+                    console.log('📦 Found session in sessionStorage backup');
                     // Restore to localStorage
                     localStorage.setItem('batch-session', batchSession);
                 }
@@ -651,10 +647,7 @@ export default function HomePage() {
             }
 
             // Also check all storage keys for debugging
-            console.log(
-                '📦 All localStorage keys:',
-                Object.keys(localStorage),
-            );
+            console.log('📦 All localStorage keys:', Object.keys(localStorage));
             console.log(
                 '📦 All sessionStorage keys:',
                 Object.keys(sessionStorage),
@@ -754,13 +747,11 @@ export default function HomePage() {
                                     timestamp: Date.now(),
                                     lastProgressTime: Date.now(),
                                     originalFileName:
-                                        activeSession.filename ||
-                                        'document',
+                                        activeSession.filename || 'document',
                                     documentType:
                                         activeSession.document_type ||
                                         selectedType,
-                                    totalPages:
-                                        activeSession.total_pages || 25,
+                                    totalPages: activeSession.total_pages || 25,
                                 };
 
                                 // Store in all backup locations
@@ -1843,9 +1834,16 @@ export default function HomePage() {
                                                 <span
                                                     className={`
                                                         px-1.5 py-0.5 text-xs rounded-full font-bold
-                                                        ${isSelected 
-                                                            ? 'bg-white text-' + config.color + '-600' 
-                                                            : 'bg-' + config.color + '-100 text-' + config.color + '-700'
+                                                        ${
+                                                            isSelected
+                                                                ? 'bg-white text-' +
+                                                                  config.color +
+                                                                  '-600'
+                                                                : 'bg-' +
+                                                                  config.color +
+                                                                  '-100 text-' +
+                                                                  config.color +
+                                                                  '-700'
                                                         }
                                                         flex-shrink-0
                                                     `}
