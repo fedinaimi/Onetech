@@ -18,6 +18,7 @@ import {
     Square,
     Table,
     Trash2,
+    Upload,
     X,
 } from 'lucide-react';
 import React, { Fragment, useMemo, useState } from 'react';
@@ -1749,28 +1750,43 @@ export default function DocumentList({
                     )}
                 </div>
             ) : (
-                <div className="text-center py-8 sm:py-12 bg-white rounded-2xl shadow-lg border border-gray-200">
+                <div className="text-center py-12 sm:py-16 bg-gradient-to-br from-gray-50 to-white rounded-2xl shadow-xl border-2 border-gray-200 overflow-hidden relative">
+                    {/* Decorative elements */}
+                    <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-blue-500 via-orange-500 to-green-500"></div>
+                    
                     <div
-                        className={`w-16 h-16 sm:w-20 sm:h-20 lg:w-24 lg:h-24 mx-auto mb-4 sm:mb-6 bg-${color}-100 rounded-full flex items-center justify-center`}
+                        className={`w-20 h-20 sm:w-24 sm:h-24 mx-auto mb-6 bg-gradient-to-br from-${color}-100 to-${color}-200 rounded-full flex items-center justify-center shadow-lg transform hover:scale-110 transition-transform duration-300`}
                     >
                         <FileText
-                            className={`h-8 w-8 sm:h-10 sm:w-10 lg:h-12 lg:w-12 text-${color}-600`}
+                            className={`h-10 w-10 sm:h-12 sm:w-12 text-${color}-600`}
                         />
                     </div>
-                    <h3 className="text-lg sm:text-xl font-semibold text-gray-900 mb-2">
+                    <h3 className="text-xl sm:text-2xl font-bold bg-gradient-to-r from-gray-700 to-gray-900 bg-clip-text text-transparent mb-3">
                         No {selectedType} Documents Found
                     </h3>
-                    <p className="text-sm sm:text-base text-gray-600 mb-4 max-w-md mx-auto px-4">
-                        Upload your first {selectedType.toLowerCase()} document
-                        to get started with AI-powered data extraction.
+                    <p className="text-sm sm:text-base text-gray-600 mb-6 max-w-lg mx-auto px-4 leading-relaxed">
+                        {isLoading ? (
+                            <span className="inline-flex items-center">
+                                <Loader2 className="h-5 w-5 animate-spin mr-2 text-blue-600" />
+                                Loading documents...
+                            </span>
+                        ) : (
+                            <>
+                                Upload your first {selectedType.toLowerCase()} document
+                                to get started with AI-powered data extraction.
+                            </>
+                        )}
                     </p>
-                    <div
-                        className={`inline-flex items-center space-x-2 text-${color}-600 bg-${color}-50 px-3 sm:px-4 py-2 rounded-lg`}
-                    >
-                        <span className="text-sm font-medium">
-                            Tip: Drag and drop files above to upload
-                        </span>
-                    </div>
+                    {!isLoading && (
+                        <div
+                            className={`inline-flex items-center space-x-2 text-${color}-700 bg-${color}-50 border border-${color}-200 px-4 sm:px-5 py-2.5 rounded-xl shadow-md hover:shadow-lg transition-all duration-200 font-medium`}
+                        >
+                            <Upload className="h-4 w-4" />
+                            <span className="text-sm">
+                                Drag and drop files above to upload
+                            </span>
+                        </div>
+                    )}
                 </div>
             )}
 

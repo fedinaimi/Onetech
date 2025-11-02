@@ -379,6 +379,33 @@ export const RebutTable: React.FC<TableRendererProps> = ({
 
                 const value = dataSource[key];
                 if (Array.isArray(value) && value.length > 0) {
+                    // Define column order for items table to place "Total scrapped" right after "Reference"
+                    const getColumnOrder = () => {
+                        const keys = Object.keys(value[0] || {});
+                        if (key === 'items' && keys.includes('reference') && keys.includes('total_scrapped')) {
+                            // For items table, reorder to place total_scrapped after reference
+                            const priorityOrder = ['reference', 'total_scrapped', 'reference_fjk', 'designation', 'quantity', 'unit', 'type'];
+                            const orderedKeys: string[] = [];
+                            const remainingKeys = new Set(keys);
+
+                            // First, add priority keys in order
+                            for (const priorityKey of priorityOrder) {
+                                if (remainingKeys.has(priorityKey)) {
+                                    orderedKeys.push(priorityKey);
+                                    remainingKeys.delete(priorityKey);
+                                }
+                            }
+
+                            // Then add any remaining keys
+                            orderedKeys.push(...Array.from(remainingKeys));
+
+                            return orderedKeys;
+                        }
+                        return keys;
+                    };
+
+                    const orderedKeys = getColumnOrder();
+
                     return (
                         <div
                             key={key}
@@ -396,7 +423,7 @@ export const RebutTable: React.FC<TableRendererProps> = ({
                                 <table className="min-w-full divide-y divide-gray-200">
                                     <thead className="bg-gradient-to-r from-gray-100 to-gray-200">
                                         <tr>
-                                            {Object.keys(value[0] || {}).map(
+                                            {orderedKeys.map(
                                                 subKey => (
                                                     <th
                                                         key={subKey}
@@ -423,7 +450,7 @@ export const RebutTable: React.FC<TableRendererProps> = ({
                                         {value.map(
                                             (item: any, index: number) => (
                                                 <tr key={index}>
-                                                    {Object.keys(item).map(
+                                                    {orderedKeys.map(
                                                         subKey => (
                                                             <td
                                                                 key={subKey}
