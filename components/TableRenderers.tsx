@@ -1,4 +1,11 @@
-import { AlertCircle, Edit2, Shield, ShieldCheck } from 'lucide-react';
+import {
+    AlertCircle,
+    Edit2,
+    Loader2,
+    Plus,
+    Shield,
+    ShieldCheck,
+} from 'lucide-react';
 import React from 'react';
 
 interface EditableFieldProps {
@@ -331,6 +338,7 @@ const HeaderCard: React.FC<
 
 export const RebutTable: React.FC<TableRendererProps> = ({
     doc,
+    selectedType,
     editingCell,
     editValue,
     setEditValue,
@@ -339,18 +347,107 @@ export const RebutTable: React.FC<TableRendererProps> = ({
     saveEdit,
     editedData,
 }) => {
-    // Use editedData if available, otherwise use doc.data
-    const dataSource = editedData || doc.data;
+    // State for "Add Row" - track which table is adding a row
+    const [addingRowForTable, setAddingRowForTable] = React.useState<
+        string | null
+    >(null);
+    const [localData, setLocalData] = React.useState<any>(null);
+    const [isAddingRow, setIsAddingRow] = React.useState(false);
+
+    // Initialize local data copy
+    React.useEffect(() => {
+        if (editedData || doc.data) {
+            setLocalData(JSON.parse(JSON.stringify(editedData || doc.data)));
+        }
+    }, [editedData, doc.data]);
+
+    // Use localData if available, otherwise use editedData/doc.data
+    const displayData = localData || editedData || doc.data;
+
+    // Handle adding a new row - adds directly to the table inline
+    const handleAddRow = async (tableKey: string) => {
+        setIsAddingRow(true);
+        setAddingRowForTable(tableKey);
+        try {
+            // Get current items array from local data
+            const currentData = localData || editedData || doc.data;
+            const currentItems = currentData[tableKey] || [];
+
+            // Create new row with empty values for all columns
+            // If array is empty, use default column structure for items table
+            let newItem: Record<string, any> = {};
+
+            if (currentItems.length > 0) {
+                // Use existing item structure
+                const sampleItem = currentItems[0];
+                Object.keys(sampleItem).forEach(key => {
+                    newItem[key] = ''; // Empty string for all fields
+                });
+            } else {
+                // For empty arrays, create default structure based on table key
+                if (tableKey === 'items') {
+                    newItem = {
+                        reference: '',
+                        total_scrapped: '',
+                        reference_fjk: '',
+                        designation: '',
+                        quantity: '',
+                        unit: '',
+                        type: '',
+                    };
+                } else {
+                    // For other tables, we'll need at least one field
+                    newItem = { value: '' };
+                }
+            }
+
+            // Add the new row to local data immediately for UI update
+            const updatedData = JSON.parse(JSON.stringify(currentData));
+            updatedData[tableKey] = [...currentItems, newItem];
+            setLocalData(updatedData);
+
+            // Update the entire array using the field path
+            const field = `data.${tableKey}`;
+            const updatedItems = [...currentItems, newItem];
+
+            // Call API to update the document
+            const response = await fetch('/api/documents', {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    id: doc.id,
+                    type: selectedType,
+                    field,
+                    oldValue: currentItems,
+                    newValue: updatedItems,
+                }),
+            });
+
+            if (!response.ok) {
+                throw new Error('Failed to add row');
+            }
+        } catch (error) {
+            console.error('Error adding row:', error);
+            alert('Failed to add row. Please try again.');
+            // Revert local data on error
+            setLocalData(JSON.parse(JSON.stringify(editedData || doc.data)));
+        } finally {
+            setIsAddingRow(false);
+            setAddingRowForTable(null);
+        }
+    };
 
     // Generate header fields dynamically from the actual header data
-    const headerFields = dataSource?.header
-        ? Object.keys(dataSource.header).map(key => ({
+    const headerFields = displayData?.header
+        ? Object.keys(displayData.header).map(key => ({
               label:
                   key.charAt(0).toUpperCase() + key.slice(1).replace(/_/g, ' '),
               field: `data.header.${key}`,
-              value: dataSource.header[key],
+              value: displayData.header[key],
               type:
-                  typeof dataSource.header[key] === 'number'
+                  typeof displayData.header[key] === 'number'
                       ? ('number' as const)
                       : ('text' as const),
           }))
@@ -374,11 +471,49 @@ export const RebutTable: React.FC<TableRendererProps> = ({
             )}
 
             {/* Dynamic sections for any arrays in the data */}
-            {Object.keys(dataSource || {}).map(key => {
+            {Object.keys(displayData || {}).map(key => {
                 if (key === 'header' || key === 'document_type') return null;
 
-                const value = dataSource[key];
-                if (Array.isArray(value) && value.length > 0) {
+                const value = displayData[key];
+                if (Array.isArray(value)) {
+                    // If array is empty, still show table structure with add button
+                    if (value.length === 0) {
+                        return (
+                            <div
+                                key={key}
+                                className="bg-white shadow-sm rounded-xl border border-gray-200 overflow-hidden mb-8"
+                            >
+                                <div className="px-6 py-5 bg-gradient-to-r from-emerald-600 via-green-600 to-teal-600">
+                                    <h3 className="text-xl font-bold text-white flex items-center">
+                                        <div className="w-2 h-8 bg-white rounded-full mr-3 opacity-80"></div>
+                                        {key.charAt(0).toUpperCase() +
+                                            key
+                                                .slice(1)
+                                                .replace(/_/g, ' ')}{' '}
+                                        Data
+                                    </h3>
+                                </div>
+                                <div className="px-6 py-8 text-center bg-gray-50">
+                                    <p className="text-gray-600 mb-4">
+                                        No items found. Add a new row to get
+                                        started.
+                                    </p>
+                                    <button
+                                        onClick={() => handleAddRow(key)}
+                                        disabled={isAddingRow}
+                                        className="flex items-center space-x-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white text-sm font-medium rounded-lg transition-all duration-200 mx-auto"
+                                    >
+                                        <Plus className="h-4 w-4" />
+                                        <span>
+                                            {isAddingRow
+                                                ? 'Adding...'
+                                                : 'Add First Row'}
+                                        </span>
+                                    </button>
+                                </div>
+                            </div>
+                        );
+                    }
                     // Define column order for items table to place "Total scrapped" right after "Reference"
                     const getColumnOrder = () => {
                         const keys = Object.keys(value[0] || {});
@@ -507,6 +642,28 @@ export const RebutTable: React.FC<TableRendererProps> = ({
                                         )}
                                     </tbody>
                                 </table>
+                            </div>
+
+                            {/* Add Row Button */}
+                            <div className="px-6 py-3 bg-gray-50 border-t border-gray-200">
+                                <button
+                                    onClick={() => handleAddRow(key)}
+                                    disabled={isAddingRow}
+                                    className="flex items-center space-x-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white text-sm font-medium rounded-lg transition-all duration-200 hover:scale-[1.02] shadow-md hover:shadow-lg"
+                                >
+                                    {isAddingRow &&
+                                    addingRowForTable === key ? (
+                                        <>
+                                            <Loader2 className="h-4 w-4 animate-spin" />
+                                            <span>Adding...</span>
+                                        </>
+                                    ) : (
+                                        <>
+                                            <Plus className="h-4 w-4" />
+                                            <span>Add Missing Row</span>
+                                        </>
+                                    )}
+                                </button>
                             </div>
                         </div>
                     );
