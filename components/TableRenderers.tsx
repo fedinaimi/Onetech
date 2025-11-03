@@ -1,10 +1,13 @@
 import {
     AlertCircle,
+    ArrowDown,
+    ArrowUp,
     Edit2,
     Loader2,
     Plus,
     Shield,
     ShieldCheck,
+    Trash2,
 } from 'lucide-react';
 import React from 'react';
 
@@ -439,6 +442,108 @@ export const RebutTable: React.FC<TableRendererProps> = ({
         }
     };
 
+    // Handle deleting a row
+    const handleDeleteRow = async (tableKey: string, index: number) => {
+        if (!confirm('Are you sure you want to delete this row?')) {
+            return;
+        }
+
+        try {
+            const currentData = localData || editedData || doc.data;
+            const currentItems = currentData[tableKey] || [];
+
+            // Remove the row at the specified index
+            const updatedItems = currentItems.filter(
+                (_: any, i: number) => i !== index,
+            );
+
+            // Update local data immediately
+            const updatedData = JSON.parse(JSON.stringify(currentData));
+            updatedData[tableKey] = updatedItems;
+            setLocalData(updatedData);
+
+            // Update via API
+            const field = `data.${tableKey}`;
+            const response = await fetch('/api/documents', {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    id: doc.id,
+                    type: selectedType,
+                    field,
+                    oldValue: currentItems,
+                    newValue: updatedItems,
+                }),
+            });
+
+            if (!response.ok) {
+                throw new Error('Failed to delete row');
+            }
+        } catch (error) {
+            console.error('Error deleting row:', error);
+            alert('Failed to delete row. Please try again.');
+            // Revert local data on error
+            setLocalData(JSON.parse(JSON.stringify(editedData || doc.data)));
+        }
+    };
+
+    // Handle reordering rows (move up or down)
+    const handleReorderRow = async (
+        tableKey: string,
+        index: number,
+        direction: 'up' | 'down',
+    ) => {
+        try {
+            const currentData = localData || editedData || doc.data;
+            const currentItems = currentData[tableKey] || [];
+
+            // Check bounds
+            if (direction === 'up' && index === 0) return;
+            if (direction === 'down' && index === currentItems.length - 1)
+                return;
+
+            // Create new array with swapped items
+            const updatedItems = [...currentItems];
+            const newIndex = direction === 'up' ? index - 1 : index + 1;
+            [updatedItems[index], updatedItems[newIndex]] = [
+                updatedItems[newIndex],
+                updatedItems[index],
+            ];
+
+            // Update local data immediately
+            const updatedData = JSON.parse(JSON.stringify(currentData));
+            updatedData[tableKey] = updatedItems;
+            setLocalData(updatedData);
+
+            // Update via API
+            const field = `data.${tableKey}`;
+            const response = await fetch('/api/documents', {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    id: doc.id,
+                    type: selectedType,
+                    field,
+                    oldValue: currentItems,
+                    newValue: updatedItems,
+                }),
+            });
+
+            if (!response.ok) {
+                throw new Error('Failed to reorder row');
+            }
+        } catch (error) {
+            console.error('Error reordering row:', error);
+            alert('Failed to reorder row. Please try again.');
+            // Revert local data on error
+            setLocalData(JSON.parse(JSON.stringify(editedData || doc.data)));
+        }
+    };
+
     // Generate header fields dynamically from the actual header data
     const headerFields = displayData?.header
         ? Object.keys(displayData.header).map(key => ({
@@ -632,10 +737,57 @@ export const RebutTable: React.FC<TableRendererProps> = ({
                                                             />
                                                         </td>
                                                     ))}
-                                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                                                        <span className="text-sm text-gray-400">
-                                                            —
-                                                        </span>
+                                                    <td className="px-6 py-4 whitespace-nowrap">
+                                                        <div className="flex items-center space-x-1">
+                                                            {/* Reorder Buttons */}
+                                                            <button
+                                                                onClick={() =>
+                                                                    handleReorderRow(
+                                                                        key,
+                                                                        index,
+                                                                        'up',
+                                                                    )
+                                                                }
+                                                                disabled={
+                                                                    index === 0
+                                                                }
+                                                                className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded transition-all duration-200 disabled:opacity-30 disabled:cursor-not-allowed"
+                                                                title="Move up"
+                                                            >
+                                                                <ArrowUp className="h-4 w-4" />
+                                                            </button>
+                                                            <button
+                                                                onClick={() =>
+                                                                    handleReorderRow(
+                                                                        key,
+                                                                        index,
+                                                                        'down',
+                                                                    )
+                                                                }
+                                                                disabled={
+                                                                    index ===
+                                                                    value.length -
+                                                                        1
+                                                                }
+                                                                className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded transition-all duration-200 disabled:opacity-30 disabled:cursor-not-allowed"
+                                                                title="Move down"
+                                                            >
+                                                                <ArrowDown className="h-4 w-4" />
+                                                            </button>
+                                                            {/* Delete Button */}
+                                                            <button
+                                                                onClick={() =>
+                                                                    handleDeleteRow(
+                                                                        key,
+                                                                        index,
+                                                                    )
+                                                                }
+                                                                className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded transition-all duration-200"
+                                                                title="Delete row"
+                                                            >
+                                                                <Trash2 className="h-4 w-4" />
+                                                            </button>
+                                                        </div>
                                                     </td>
                                                 </tr>
                                             ),
@@ -645,7 +797,12 @@ export const RebutTable: React.FC<TableRendererProps> = ({
                             </div>
 
                             {/* Add Row Button */}
-                            <div className="px-6 py-3 bg-gray-50 border-t border-gray-200">
+                            <div className="px-6 py-3 bg-gray-50 border-t border-gray-200 flex items-center justify-between">
+                                <div className="text-sm text-gray-500">
+                                    {value.length === 0
+                                        ? 'No rows in table'
+                                        : `${value.length} row${value.length !== 1 ? 's' : ''}`}
+                                </div>
                                 <button
                                     onClick={() => handleAddRow(key)}
                                     disabled={isAddingRow}
@@ -660,7 +817,7 @@ export const RebutTable: React.FC<TableRendererProps> = ({
                                     ) : (
                                         <>
                                             <Plus className="h-4 w-4" />
-                                            <span>Add Missing Row</span>
+                                            <span>Add Row</span>
                                         </>
                                     )}
                                 </button>
@@ -676,6 +833,7 @@ export const RebutTable: React.FC<TableRendererProps> = ({
 
 export const NPTTable: React.FC<TableRendererProps> = ({
     doc,
+    selectedType,
     editingCell,
     editValue,
     setEditValue,
@@ -684,8 +842,182 @@ export const NPTTable: React.FC<TableRendererProps> = ({
     saveEdit,
     editedData,
 }) => {
-    // Use editedData if available, otherwise use doc.data
-    const dataSource = editedData || doc.data;
+    // State for "Add Row" - track which table is adding a row
+    const [addingRowForTable, setAddingRowForTable] = React.useState<
+        string | null
+    >(null);
+    const [localData, setLocalData] = React.useState<any>(null);
+    const [isAddingRow, setIsAddingRow] = React.useState(false);
+
+    // Initialize local data copy
+    React.useEffect(() => {
+        if (editedData || doc.data) {
+            setLocalData(JSON.parse(JSON.stringify(editedData || doc.data)));
+        }
+    }, [editedData, doc.data]);
+
+    // Use localData if available, otherwise use editedData/doc.data
+    const dataSource = localData || editedData || doc.data;
+
+    // Handle adding a new row
+    const handleAddRow = async (tableKey: string) => {
+        setIsAddingRow(true);
+        setAddingRowForTable(tableKey);
+        try {
+            const currentData = localData || editedData || doc.data;
+            const currentItems = currentData[tableKey] || [];
+
+            let newItem: Record<string, any> = {};
+            if (currentItems.length > 0) {
+                const sampleItem = currentItems[0];
+                Object.keys(sampleItem).forEach(key => {
+                    newItem[key] = '';
+                });
+            } else {
+                if (tableKey === 'downtime_events') {
+                    newItem = {
+                        codes_ligne: '',
+                        ref_pf: '',
+                        designation: '',
+                        mod_impacte: '',
+                        npt_minutes: '',
+                        heure_debut_d_arret: '',
+                        heure_fin_d_arret: '',
+                        cause_npt: '',
+                        numero_di: '',
+                        commentaire: '',
+                        validation: '',
+                    };
+                } else {
+                    newItem = { value: '' };
+                }
+            }
+
+            const updatedData = JSON.parse(JSON.stringify(currentData));
+            updatedData[tableKey] = [...currentItems, newItem];
+            setLocalData(updatedData);
+
+            const field = `data.${tableKey}`;
+            const updatedItems = [...currentItems, newItem];
+
+            const response = await fetch('/api/documents', {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    id: doc.id,
+                    type: selectedType,
+                    field,
+                    oldValue: currentItems,
+                    newValue: updatedItems,
+                }),
+            });
+
+            if (!response.ok) {
+                throw new Error('Failed to add row');
+            }
+        } catch (error) {
+            console.error('Error adding row:', error);
+            alert('Failed to add row. Please try again.');
+            setLocalData(JSON.parse(JSON.stringify(editedData || doc.data)));
+        } finally {
+            setIsAddingRow(false);
+            setAddingRowForTable(null);
+        }
+    };
+
+    // Handle deleting a row
+    const handleDeleteRow = async (tableKey: string, index: number) => {
+        if (!confirm('Are you sure you want to delete this row?')) {
+            return;
+        }
+
+        try {
+            const currentData = localData || editedData || doc.data;
+            const currentItems = currentData[tableKey] || [];
+            const updatedItems = currentItems.filter(
+                (_: any, i: number) => i !== index,
+            );
+
+            const updatedData = JSON.parse(JSON.stringify(currentData));
+            updatedData[tableKey] = updatedItems;
+            setLocalData(updatedData);
+
+            const field = `data.${tableKey}`;
+            const response = await fetch('/api/documents', {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    id: doc.id,
+                    type: selectedType,
+                    field,
+                    oldValue: currentItems,
+                    newValue: updatedItems,
+                }),
+            });
+
+            if (!response.ok) {
+                throw new Error('Failed to delete row');
+            }
+        } catch (error) {
+            console.error('Error deleting row:', error);
+            alert('Failed to delete row. Please try again.');
+            setLocalData(JSON.parse(JSON.stringify(editedData || doc.data)));
+        }
+    };
+
+    // Handle reordering rows
+    const handleReorderRow = async (
+        tableKey: string,
+        index: number,
+        direction: 'up' | 'down',
+    ) => {
+        try {
+            const currentData = localData || editedData || doc.data;
+            const currentItems = currentData[tableKey] || [];
+
+            if (direction === 'up' && index === 0) return;
+            if (direction === 'down' && index === currentItems.length - 1)
+                return;
+
+            const updatedItems = [...currentItems];
+            const newIndex = direction === 'up' ? index - 1 : index + 1;
+            [updatedItems[index], updatedItems[newIndex]] = [
+                updatedItems[newIndex],
+                updatedItems[index],
+            ];
+
+            const updatedData = JSON.parse(JSON.stringify(currentData));
+            updatedData[tableKey] = updatedItems;
+            setLocalData(updatedData);
+
+            const field = `data.${tableKey}`;
+            const response = await fetch('/api/documents', {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    id: doc.id,
+                    type: selectedType,
+                    field,
+                    oldValue: currentItems,
+                    newValue: updatedItems,
+                }),
+            });
+
+            if (!response.ok) {
+                throw new Error('Failed to reorder row');
+            }
+        } catch (error) {
+            console.error('Error reordering row:', error);
+            alert('Failed to reorder row. Please try again.');
+            setLocalData(JSON.parse(JSON.stringify(editedData || doc.data)));
+        }
+    };
 
     // Generate header fields dynamically from the actual header data
     const headerFields = dataSource?.header
@@ -720,8 +1052,8 @@ export const NPTTable: React.FC<TableRendererProps> = ({
 
             {/* Downtime Events Table - Dynamic based on actual data */}
             {dataSource?.downtime_events &&
-                Array.isArray(dataSource.downtime_events) &&
-                dataSource.downtime_events.length > 0 && (
+            Array.isArray(dataSource.downtime_events) ? (
+                dataSource.downtime_events.length > 0 ? (
                     <div className="bg-white shadow-lg rounded-lg border border-gray-200 overflow-hidden">
                         <div className="px-6 py-4 bg-gradient-to-r from-orange-600 to-orange-700">
                             <h3 className="text-lg font-semibold text-white">
@@ -789,10 +1121,57 @@ export const NPTTable: React.FC<TableRendererProps> = ({
                                                         />
                                                     </td>
                                                 ))}
-                                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                                                    <span className="text-sm text-gray-400">
-                                                        —
-                                                    </span>
+                                                <td className="px-6 py-4 whitespace-nowrap">
+                                                    <div className="flex items-center space-x-1">
+                                                        <button
+                                                            onClick={() =>
+                                                                handleReorderRow(
+                                                                    'downtime_events',
+                                                                    index,
+                                                                    'up',
+                                                                )
+                                                            }
+                                                            disabled={
+                                                                index === 0
+                                                            }
+                                                            className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded transition-all duration-200 disabled:opacity-30 disabled:cursor-not-allowed"
+                                                            title="Move up"
+                                                        >
+                                                            <ArrowUp className="h-4 w-4" />
+                                                        </button>
+                                                        <button
+                                                            onClick={() =>
+                                                                handleReorderRow(
+                                                                    'downtime_events',
+                                                                    index,
+                                                                    'down',
+                                                                )
+                                                            }
+                                                            disabled={
+                                                                index ===
+                                                                dataSource
+                                                                    .downtime_events
+                                                                    .length -
+                                                                    1
+                                                            }
+                                                            className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded transition-all duration-200 disabled:opacity-30 disabled:cursor-not-allowed"
+                                                            title="Move down"
+                                                        >
+                                                            <ArrowDown className="h-4 w-4" />
+                                                        </button>
+                                                        <button
+                                                            onClick={() =>
+                                                                handleDeleteRow(
+                                                                    'downtime_events',
+                                                                    index,
+                                                                )
+                                                            }
+                                                            className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded transition-all duration-200"
+                                                            title="Delete row"
+                                                        >
+                                                            <Trash2 className="h-4 w-4" />
+                                                        </button>
+                                                    </div>
                                                 </td>
                                             </tr>
                                         ),
@@ -800,11 +1179,64 @@ export const NPTTable: React.FC<TableRendererProps> = ({
                                 </tbody>
                             </table>
                         </div>
+                        <div className="px-6 py-3 bg-gray-50 border-t border-gray-200 flex items-center justify-between">
+                            <div className="text-sm text-gray-500">
+                                {dataSource.downtime_events.length} row
+                                {dataSource.downtime_events.length !== 1
+                                    ? 's'
+                                    : ''}
+                            </div>
+                            <button
+                                onClick={() => handleAddRow('downtime_events')}
+                                disabled={isAddingRow}
+                                className="flex items-center space-x-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white text-sm font-medium rounded-lg transition-all duration-200 hover:scale-[1.02] shadow-md hover:shadow-lg"
+                            >
+                                {isAddingRow &&
+                                addingRowForTable === 'downtime_events' ? (
+                                    <>
+                                        <Loader2 className="h-4 w-4 animate-spin" />
+                                        <span>Adding...</span>
+                                    </>
+                                ) : (
+                                    <>
+                                        <Plus className="h-4 w-4" />
+                                        <span>Add Row</span>
+                                    </>
+                                )}
+                            </button>
+                        </div>
                     </div>
-                )}
+                ) : (
+                    <div className="bg-white shadow-lg rounded-lg border border-gray-200 overflow-hidden">
+                        <div className="px-6 py-4 bg-gradient-to-r from-orange-600 to-orange-700">
+                            <h3 className="text-lg font-semibold text-white">
+                                Downtime Events
+                            </h3>
+                        </div>
+                        <div className="px-6 py-8 text-center bg-gray-50">
+                            <p className="text-gray-600 mb-4">
+                                No downtime events found. Add a new row to get
+                                started.
+                            </p>
+                            <button
+                                onClick={() => handleAddRow('downtime_events')}
+                                disabled={isAddingRow}
+                                className="flex items-center space-x-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white text-sm font-medium rounded-lg transition-all duration-200 mx-auto"
+                            >
+                                <Plus className="h-4 w-4" />
+                                <span>
+                                    {isAddingRow
+                                        ? 'Adding...'
+                                        : 'Add First Row'}
+                                </span>
+                            </button>
+                        </div>
+                    </div>
+                )
+            ) : null}
 
             {/* Additional dynamic sections for any other arrays in the data */}
-            {Object.keys(doc.data || {}).map(key => {
+            {Object.keys(dataSource || {}).map(key => {
                 if (
                     key === 'header' ||
                     key === 'downtime_events' ||
@@ -812,8 +1244,41 @@ export const NPTTable: React.FC<TableRendererProps> = ({
                 )
                     return null;
 
-                const value = doc.data[key];
-                if (Array.isArray(value) && value.length > 0) {
+                const value = dataSource[key];
+                if (Array.isArray(value)) {
+                    if (value.length === 0) {
+                        return (
+                            <div
+                                key={key}
+                                className="bg-white shadow-lg rounded-lg border border-gray-200 overflow-hidden"
+                            >
+                                <div className="px-6 py-4 bg-gradient-to-r from-purple-600 to-purple-700">
+                                    <h3 className="text-lg font-semibold text-white">
+                                        {key.charAt(0).toUpperCase() +
+                                            key.slice(1).replace(/_/g, ' ')}
+                                    </h3>
+                                </div>
+                                <div className="px-6 py-8 text-center bg-gray-50">
+                                    <p className="text-gray-600 mb-4">
+                                        No items found. Add a new row to get
+                                        started.
+                                    </p>
+                                    <button
+                                        onClick={() => handleAddRow(key)}
+                                        disabled={isAddingRow}
+                                        className="flex items-center space-x-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white text-sm font-medium rounded-lg transition-all duration-200 mx-auto"
+                                    >
+                                        <Plus className="h-4 w-4" />
+                                        <span>
+                                            {isAddingRow
+                                                ? 'Adding...'
+                                                : 'Add First Row'}
+                                        </span>
+                                    </button>
+                                </div>
+                            </div>
+                        );
+                    }
                     return (
                         <div
                             key={key}
@@ -902,16 +1367,85 @@ export const NPTTable: React.FC<TableRendererProps> = ({
                                                             </td>
                                                         ),
                                                     )}
-                                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                                                        <span className="text-sm text-gray-400">
-                                                            —
-                                                        </span>
+                                                    <td className="px-6 py-4 whitespace-nowrap">
+                                                        <div className="flex items-center space-x-1">
+                                                            <button
+                                                                onClick={() =>
+                                                                    handleReorderRow(
+                                                                        key,
+                                                                        index,
+                                                                        'up',
+                                                                    )
+                                                                }
+                                                                disabled={
+                                                                    index === 0
+                                                                }
+                                                                className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded transition-all duration-200 disabled:opacity-30 disabled:cursor-not-allowed"
+                                                                title="Move up"
+                                                            >
+                                                                <ArrowUp className="h-4 w-4" />
+                                                            </button>
+                                                            <button
+                                                                onClick={() =>
+                                                                    handleReorderRow(
+                                                                        key,
+                                                                        index,
+                                                                        'down',
+                                                                    )
+                                                                }
+                                                                disabled={
+                                                                    index ===
+                                                                    value.length -
+                                                                        1
+                                                                }
+                                                                className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded transition-all duration-200 disabled:opacity-30 disabled:cursor-not-allowed"
+                                                                title="Move down"
+                                                            >
+                                                                <ArrowDown className="h-4 w-4" />
+                                                            </button>
+                                                            <button
+                                                                onClick={() =>
+                                                                    handleDeleteRow(
+                                                                        key,
+                                                                        index,
+                                                                    )
+                                                                }
+                                                                className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded transition-all duration-200"
+                                                                title="Delete row"
+                                                            >
+                                                                <Trash2 className="h-4 w-4" />
+                                                            </button>
+                                                        </div>
                                                     </td>
                                                 </tr>
                                             ),
                                         )}
                                     </tbody>
                                 </table>
+                            </div>
+                            <div className="px-6 py-3 bg-gray-50 border-t border-gray-200 flex items-center justify-between">
+                                <div className="text-sm text-gray-500">
+                                    {value.length} row
+                                    {value.length !== 1 ? 's' : ''}
+                                </div>
+                                <button
+                                    onClick={() => handleAddRow(key)}
+                                    disabled={isAddingRow}
+                                    className="flex items-center space-x-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white text-sm font-medium rounded-lg transition-all duration-200 hover:scale-[1.02] shadow-md hover:shadow-lg"
+                                >
+                                    {isAddingRow &&
+                                    addingRowForTable === key ? (
+                                        <>
+                                            <Loader2 className="h-4 w-4 animate-spin" />
+                                            <span>Adding...</span>
+                                        </>
+                                    ) : (
+                                        <>
+                                            <Plus className="h-4 w-4" />
+                                            <span>Add Row</span>
+                                        </>
+                                    )}
+                                </button>
                             </div>
                         </div>
                     );
